@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from ..config import config
 from ..parser.schedule_parser import Schedule, parse_schedule
@@ -10,12 +11,15 @@ from ..parser.workbook import load_active_sheet
 from ..parser.zameny_parser import ZamenyBlock, parse_zameny
 from .college_page_scraper import fetch_college_links
 from .file_source import resolve_local_file
+from .group_reconcile import ZamenyAnomaly, find_zameny_anomalies
 
 
 @dataclass
 class CachedData:
     schedule: Schedule
     zameny: list[ZamenyBlock]
+    zameny_file_path: Path
+    anomalies: list[ZamenyAnomaly]
     fetched_at: float
 
 
@@ -48,9 +52,14 @@ async def _fetch_data() -> CachedData:
         asyncio.to_thread(load_active_sheet, zameny_file),
     )
 
+    schedule = parse_schedule(schedule_sheet)
+    zameny = parse_zameny(zameny_sheet)
+
     return CachedData(
-        schedule=parse_schedule(schedule_sheet),
-        zameny=parse_zameny(zameny_sheet),
+        schedule=schedule,
+        zameny=zameny,
+        zameny_file_path=zameny_file,
+        anomalies=find_zameny_anomalies(schedule, zameny),
         fetched_at=time.time(),
     )
 
@@ -82,3 +91,12 @@ async def get_schedule() -> Schedule:
 
 async def get_zameny() -> list[ZamenyBlock]:
     return (await get_data()).zameny
+
+
+async def get_zameny_anomalies() -> list[ZamenyAnomaly]:
+    return (await get_data()).anomalies
+
+
+async def get_zameny_file_path() -> Path:
+    """Локальный путь к текущей закешированной книге замен — чтобы отдавать её пользователям как есть."""
+    return (await get_data()).zameny_file_path
