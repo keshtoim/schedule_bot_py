@@ -24,7 +24,8 @@ def _format_zameny_note(row: ZamenyRow) -> str:
 
 
 async def format_day(group: str, day_date: date) -> str:
-    """Результат — текст в разметке Telegram parse_mode="HTML"."""
+    """Запасной вариант на случай сбоя sendRichMessage (schedule_rich_view):
+    обычный текст в разметке Telegram parse_mode="HTML"."""
     weekday = weekday_name(day_date)
     date_str = format_ddmmyyyy(day_date)
     schedule, zameny = await asyncio.gather(get_schedule(), get_zameny())
