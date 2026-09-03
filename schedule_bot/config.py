@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -18,6 +19,42 @@ def _require(name: str) -> str:
 @dataclass(frozen=True)
 class Config:
     bot_token: str
+    # Обычный режим: COLLEGE_PAGE_URL парсится при каждом обновлении, чтобы
+    # найти актуальные ссылки на файлы расписания/замен (они каждый раз
+    # перезаливаются под новым именем).
+    #
+    # Режим разработки: SCHEDULE_SOURCE/ZAMENY_SOURCE (URL или путь к файлу,
+    # например scratch_samples/raspisanie.xlsx) отключают парсинг страницы.
+    college_page_url: str | None
+    schedule_source: str | None
+    zameny_source: str | None
+    cache_ttl_minutes: int
+    data_dir: str
+
+    @property
+    def data_path(self) -> Path:
+        return Path(self.data_dir)
 
 
-config = Config(bot_token=_require("BOT_TOKEN"))
+def _load() -> Config:
+    bot_token = _require("BOT_TOKEN")
+    college_page_url = os.getenv("COLLEGE_PAGE_URL")
+    schedule_source = os.getenv("SCHEDULE_SOURCE")
+    zameny_source = os.getenv("ZAMENY_SOURCE")
+
+    if not college_page_url and not (schedule_source and zameny_source):
+        raise RuntimeError(
+            "Set COLLEGE_PAGE_URL in .env, or SCHEDULE_SOURCE + ZAMENY_SOURCE for a direct override."
+        )
+
+    return Config(
+        bot_token=bot_token,
+        college_page_url=college_page_url,
+        schedule_source=schedule_source,
+        zameny_source=zameny_source,
+        cache_ttl_minutes=int(os.getenv("CACHE_TTL_MINUTES") or 15),
+        data_dir=os.getenv("DATA_DIR") or "data",
+    )
+
+
+config = _load()
