@@ -45,3 +45,8 @@ async def get_chats_for_group(group: str) -> list[int]:
 async def get_subscribed_groups() -> list[str]:
     """Различные группы, которые выбрал хотя бы один чат."""
     return list(dict.fromkeys(_load().values()))
+
+
+async def get_all_chats() -> list[tuple[int, str]]:
+    """(chat_id, группа) для всех, кто уже выбрал группу."""
+    return [(int(chat_id), group) for chat_id, group in _load().items()]
