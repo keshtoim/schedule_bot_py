@@ -7,16 +7,15 @@ from aiogram.types import BufferedInputFile, Message
 from ..keyboards import Button
 from ..services.schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
 from ..services.zameny_view import format_anomaly_alert, format_zameny_row
-from ..store.user_store import get_user_group
 from ..utils.html import escape_html
+from .common import resolve_group
 
 router = Router(name="zameny")
 
 
 async def send_zameny(message: Message) -> None:
-    group = await get_user_group(message.chat.id)
+    group = await resolve_group(message)
     if not group:
-        await message.answer("Сначала выберите группу: 👥 Моя группа")
         return
 
     blocks = await get_zameny()

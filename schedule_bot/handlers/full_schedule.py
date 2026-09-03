@@ -8,17 +8,14 @@ from ..keyboards import Button
 from ..services.day_view import format_full_schedule
 from ..services.rich_message import send_rich_message_html
 from ..services.schedule_rich_view import build_full_schedule_html
-from ..store.user_store import get_user_group
+from .common import resolve_group
 
 router = Router(name="full_schedule")
 
 
-@router.message(Command("schedule"))
-@router.message(F.text == Button.FULL_SCHEDULE)
-async def send_full_schedule(message: Message) -> None:
-    group = await get_user_group(message.chat.id)
+async def send_full_schedule_for(message: Message) -> None:
+    group = await resolve_group(message)
     if not group:
-        await message.answer("Сначала выберите группу: 👥 Моя группа")
         return
 
     try:
@@ -26,3 +23,9 @@ async def send_full_schedule(message: Message) -> None:
     except Exception:
         logging.exception("sendRichMessage failed, falling back to plain HTML message")
         await message.answer(await format_full_schedule(group))
+
+
+@router.message(Command("schedule"))
+@router.message(F.text == Button.FULL_SCHEDULE)
+async def send_full_schedule(message: Message) -> None:
+    await send_full_schedule_for(message)

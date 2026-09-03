@@ -9,12 +9,10 @@ from ..keyboards import Button
 from ..services.day_view import format_day
 from ..services.rich_message import send_rich_message_html
 from ..services.schedule_rich_view import build_day_html
-from ..store.user_store import get_user_group
 from ..utils.weekday import today, tomorrow
+from .common import resolve_group
 
 router = Router(name="today")
-
-_NO_GROUP_MSG = "Сначала выберите группу: 👥 Моя группа"
 
 
 async def _send_day(message: Message, group: str, day_date: date) -> None:
@@ -28,9 +26,8 @@ async def _send_day(message: Message, group: str, day_date: date) -> None:
 @router.message(Command("today"))
 @router.message(F.text == Button.TODAY)
 async def send_today(message: Message) -> None:
-    group = await get_user_group(message.chat.id)
+    group = await resolve_group(message)
     if not group:
-        await message.answer(_NO_GROUP_MSG)
         return
     await _send_day(message, group, today())
 
@@ -38,8 +35,7 @@ async def send_today(message: Message) -> None:
 @router.message(Command("tomorrow"))
 @router.message(F.text == Button.TOMORROW)
 async def send_tomorrow(message: Message) -> None:
-    group = await get_user_group(message.chat.id)
+    group = await resolve_group(message)
     if not group:
-        await message.answer(_NO_GROUP_MSG)
         return
     await _send_day(message, group, tomorrow())

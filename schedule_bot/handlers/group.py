@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from ..keyboards import Button, main_menu
+from ..keyboards import Button, build_main_menu
 from ..services.schedule_service import get_schedule
 from ..store.user_store import set_user_group
 from ..utils.html import escape_html
@@ -29,7 +29,8 @@ async def _show_courses(message: Message, *, edit: bool) -> None:
 
 
 @router.message(Command("group"))
-@router.message(F.text == Button.GROUP)
+@router.message(F.text == Button.LAUNCH)
+@router.message(F.text.startswith(Button.GROUP_PREFIX))
 async def handle_group_command(message: Message) -> None:
     await _show_courses(message, edit=False)
 
@@ -62,4 +63,4 @@ async def handle_pick_group(callback: CallbackQuery) -> None:
     await set_user_group(callback.message.chat.id, group)
     await callback.message.edit_text(f"Группа сохранена: <b>{escape_html(group)}</b>")
     await callback.answer()
-    await callback.message.answer("Готово! Пользуйтесь меню ниже 👇", reply_markup=main_menu)
+    await callback.message.answer("Готово! Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))
