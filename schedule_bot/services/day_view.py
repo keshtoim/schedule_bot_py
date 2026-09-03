@@ -69,3 +69,33 @@ async def format_week(group: str, around: date | None = None) -> str:
     monday = monday_of_week(around or date.today())
     days = await asyncio.gather(*(format_day(group, add_days(monday, i)) for i in range(6)))
     return "\n\n".join(days)
+
+
+async def format_full_schedule(group: str) -> str:
+    """Полный недельный шаблон без привязки к дате — у чередующейся пары
+    показываются оба варианта (Ч и З), а не тот, что действует на этой неделе."""
+    schedule = await get_schedule()
+    lines = ["<b>📋 Общее расписание</b>", "<i>Ч — числитель, З — знаменатель</i>"]
+
+    for day in schedule.days:
+        lines.append(f"<b>{day.weekday}:</b>")
+        has_lessons = False
+
+        for pair in day.pairs:
+            content = pair.by_group.get(group)
+            if not content:
+                continue
+            has_lessons = True
+
+            label = f"<b>Пара {pair.pair} ({pair.time_start}–{pair.time_end}):</b>"
+            if isinstance(content, str):
+                lines.append(f"{label} {escape_html(content)}")
+            else:
+                lines.append(label)
+                lines.append(f"   Ч: {escape_html(content.numerator)}")
+                lines.append(f"   З: {escape_html(content.denominator)}")
+
+        if not has_lessons:
+            lines.append("<i>Занятий нет.</i>")
+
+    return "\n".join(lines)

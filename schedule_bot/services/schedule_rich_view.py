@@ -107,6 +107,60 @@ def _day_table_html(
     )
 
 
+def _pair_rows_general_html(pair, group: str) -> str:
+    """Как _pair_row_html, но без привязки к дате и заменам: у чередующейся
+    пары две строки (Ч/З), делящие ячейку №/Время через rowspan."""
+    content = pair.by_group.get(group)
+    if not content:
+        return ""
+
+    num_cell = f"<td>{_esc(pair.pair)}</td><td>{_esc(pair.time_start)}–{_esc(pair.time_end)}</td>"
+
+    if isinstance(content, str):
+        subject, teacher = _split_lesson_text(content)
+        return f"<tr>{num_cell}<td>{_esc(subject)}</td><td>{_esc(teacher)}</td></tr>"
+
+    num = _split_lesson_text(content.numerator)
+    den = _split_lesson_text(content.denominator)
+    span_cell = (
+        f'<td rowspan="2">{_esc(pair.pair)}</td>'
+        f'<td rowspan="2">{_esc(pair.time_start)}–{_esc(pair.time_end)}</td>'
+    )
+    return (
+        f"<tr>{span_cell}<td>Ч: {_esc(num[0])}</td><td>{_esc(num[1])}</td></tr>"
+        f"<tr><td>З: {_esc(den[0])}</td><td>{_esc(den[1])}</td></tr>"
+    )
+
+
+def _day_table_general_html(day: ScheduleDay | None, group: str) -> str:
+    if day is None:
+        return "<p><i>Занятий нет (выходной по расписанию).</i></p>"
+
+    rows = [r for r in (_pair_rows_general_html(p, group) for p in day.pairs) if r]
+    if not rows:
+        return "<p><i>Занятий нет.</i></p>"
+
+    return (
+        "<table bordered striped>"
+        "<tr><th>№ пары</th><th>Время</th><th>Предмет</th><th>Преподаватель / Аудитория</th></tr>"
+        + "".join(rows)
+        + "</table>"
+    )
+
+
+async def build_full_schedule_html(group: str) -> str:
+    """Полный недельный шаблон без привязки к дате: чередующаяся пара
+    показывает оба варианта (Ч и З). Замен тоже нет — они привязаны к датам."""
+    schedule = await get_schedule()
+    parts = ["<h3>📋 Общее расписание</h3><p><i>Ч — числитель, З — знаменатель</i></p>"]
+
+    for day in schedule.days:
+        parts.append(f"<h4>{day.weekday}</h4>")
+        parts.append(_day_table_general_html(day, group))
+
+    return "".join(parts)
+
+
 async def build_day_html(group: str, day_date: date) -> str:
     """Один день как rich-HTML: заголовок <h3> с датой плюс таблица занятий."""
     weekday = weekday_name(day_date)
