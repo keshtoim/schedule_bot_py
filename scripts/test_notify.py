@@ -13,7 +13,11 @@ os.environ.setdefault("ZAMENY_SOURCE", "scratch_samples/zameny.xlsx")
 
 from schedule_bot.parser.zameny_parser import ZamenyBlock, ZamenyRow  # noqa: E402
 from schedule_bot.services.group_reconcile import ZamenyAnomaly  # noqa: E402
-from schedule_bot.services.zameny_notifier import diff_group_digest, select_fresh_anomalies  # noqa: E402
+from schedule_bot.services.zameny_notifier import (  # noqa: E402
+    diff_group_digest,
+    next_run,
+    select_fresh_anomalies,
+)
 from schedule_bot.services.zameny_view import (  # noqa: E402
     build_zameny_digest_rich_html,
     format_zameny_digest_plain,
@@ -93,6 +97,17 @@ rich = build_zameny_digest_rich_html(dataclasses.replace(d3.digest, group=G))
 plain = format_zameny_digest_plain(dataclasses.replace(d3.digest, group=G))
 check("rich-дайджест рисует таблицу", "<table" in rich and G in rich)
 check("plain-дайджест рисуется", "Пятница, 04.09.2026" in plain and "Пара 1" in plain)
+
+# --- расписание проверок замен: 12:25, затем каждые 3 ч до полуночи ---
+from datetime import datetime, time as _t  # noqa: E402
+
+START = _t(12, 25)
+check("утром -> сегодня 12:25", next_run(datetime(2026, 9, 3, 8, 0), START, 3) == datetime(2026, 9, 3, 12, 25))
+check("в 13:00 -> сегодня 15:25", next_run(datetime(2026, 9, 3, 13, 0), START, 3) == datetime(2026, 9, 3, 15, 25))
+check("в 21:30 -> завтра 12:25", next_run(datetime(2026, 9, 3, 21, 30), START, 3) == datetime(2026, 9, 4, 12, 25))
+check("ночью (02:00) -> сегодня 12:25", next_run(datetime(2026, 9, 3, 2, 0), START, 3) == datetime(2026, 9, 3, 12, 25))
+check("ровно в 12:25 -> следующий слот 15:25", next_run(datetime(2026, 9, 3, 12, 25), START, 3) == datetime(2026, 9, 3, 15, 25))
+check("последний слот дня — 21:25, не позже", next_run(datetime(2026, 9, 3, 20, 0), START, 3) == datetime(2026, 9, 3, 21, 25))
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)

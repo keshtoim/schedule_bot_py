@@ -5,6 +5,7 @@ import dataclasses
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, time, timedelta
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
@@ -280,6 +281,19 @@ async def check_for_zameny_changes(bot: Bot) -> None:
     await _check_group_zameny_digests(bot, blocks)
 
 
+def next_run(now: datetime, start: time, interval_hours: int) -> datetime:
+    """Следующий момент проверки замен: сегодня в `start`, затем каждые
+    `interval_hours` часов, пока не перевалит за полночь. Все сегодняшние
+    слоты прошли — завтра в `start`. Ночью колледж замены не публикует."""
+    step = timedelta(hours=max(1, interval_hours))
+    slot = datetime.combine(now.date(), start)
+    while slot.date() == now.date():
+        if slot > now + timedelta(seconds=1):
+            return slot
+        slot += step
+    return datetime.combine(now.date() + timedelta(days=1), start)
+
+
 _task: asyncio.Task | None = None
 
 
@@ -287,17 +301,24 @@ def start_zameny_watcher(bot: Bot) -> None:
     global _task
 
     async def _loop() -> None:
-        interval = max(1, config.notify_interval_hours) * 60 * 60
-        log.info("Наблюдатель замен запущен (проверка раз в %d ч, первая через 30 с)", interval // 3600)
-        # Один прогон вскоре после старта (процесс мог долго лежать), потом
-        # каждые interval.
+        start, interval_h = config.notify_start, max(1, config.notify_interval_hours)
+        log.info(
+            "Наблюдатель замен запущен: первая проверка дня в %s, далее каждые %d ч до полуночи",
+            start.strftime("%H:%M"), interval_h,
+        )
+        # Догоняющий прогон вскоре после старта — процесс мог лежать и
+        # пропустить слот; дедуп в дайджестах не даст задублировать рассылку.
         await asyncio.sleep(30)
         while True:
             try:
                 await check_for_zameny_changes(bot)
             except Exception:
                 log.exception("Замены: сбой проверки изменений")
-            await asyncio.sleep(interval)
+
+            nxt = next_run(datetime.now(), start, interval_h)
+            wait = (nxt - datetime.now()).total_seconds()
+            log.info("Следующая проверка замен: %s (через %.1f ч)", nxt.strftime("%d.%m %H:%M"), wait / 3600)
+            await asyncio.sleep(max(1.0, wait))
 
     _task = asyncio.create_task(_loop())
 

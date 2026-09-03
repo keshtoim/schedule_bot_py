@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -14,6 +15,15 @@ def _require(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is not set in .env")
     return value
+
+
+def _parse_time(raw: str | None, default: str) -> time:
+    value = raw or default
+    try:
+        hh, mm = value.split(":")
+        return time(int(hh), int(mm))
+    except ValueError as err:
+        raise RuntimeError(f"Ожидал время в формате ЧЧ:ММ, получил {value!r}") from err
 
 
 @dataclass(frozen=True)
@@ -30,8 +40,10 @@ class Config:
     zameny_source: str | None
     cache_ttl_minutes: int
     data_dir: str
-    # Раз в сколько часов фоновый наблюдатель перепроверяет сайт колледжа на
-    # изменения в заменах и рассылает их подписанным группам. По умолчанию 3.
+    # Наблюдатель замен: первая проверка дня в notify_start, затем каждые
+    # notify_interval_hours часов, пока не наступит полночь; ночью не тревожим.
+    # По умолчанию 12:25 и раз в 3 часа (12:25, 15:25, 18:25, 21:25).
+    notify_start: time
     notify_interval_hours: int
 
     @property
@@ -59,6 +71,7 @@ def _load() -> Config:
         zameny_source=zameny_source,
         cache_ttl_minutes=cache_ttl_minutes,
         data_dir=os.getenv("DATA_DIR") or "data",
+        notify_start=_parse_time(os.getenv("NOTIFY_START_TIME"), "12:25"),
         notify_interval_hours=int(os.getenv("NOTIFY_INTERVAL_HOURS") or 3),
     )
 
