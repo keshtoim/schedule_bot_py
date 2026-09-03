@@ -30,6 +30,10 @@ class Config:
     zameny_source: str | None
     cache_ttl_minutes: int
     data_dir: str
+    # Как часто проверять замены на изменения и уведомлять подписавшихся.
+    # По умолчанию равно cache_ttl_minutes — чаще, чем обновляются данные,
+    # проверять смысла нет.
+    notify_interval_minutes: int
 
     @property
     def data_path(self) -> Path:
@@ -47,13 +51,16 @@ def _load() -> Config:
             "Set COLLEGE_PAGE_URL in .env, or SCHEDULE_SOURCE + ZAMENY_SOURCE for a direct override."
         )
 
+    cache_ttl_minutes = int(os.getenv("CACHE_TTL_MINUTES") or 15)
+
     return Config(
         bot_token=bot_token,
         college_page_url=college_page_url,
         schedule_source=schedule_source,
         zameny_source=zameny_source,
-        cache_ttl_minutes=int(os.getenv("CACHE_TTL_MINUTES") or 15),
+        cache_ttl_minutes=cache_ttl_minutes,
         data_dir=os.getenv("DATA_DIR") or "data",
+        notify_interval_minutes=int(os.getenv("NOTIFY_INTERVAL_MINUTES") or cache_ttl_minutes),
     )
 
 

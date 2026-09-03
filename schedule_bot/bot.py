@@ -7,6 +7,7 @@ from aiogram.types import BotCommand, ErrorEvent
 
 from .config import config
 from .handlers import full_schedule, group, start, today, week, zameny
+from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .utils.describe_error import describe_error
 
 # Наполняет меню команд "/" в Telegram. Это же заставляет работать нативную
@@ -29,6 +30,11 @@ async def _on_startup(bot: Bot) -> None:
         await bot.set_my_commands(COMMANDS)
     except Exception:
         logging.exception("set_my_commands failed")
+    start_zameny_watcher(bot)
+
+
+async def _on_shutdown() -> None:
+    stop_zameny_watcher()
 
 
 async def _on_error(event: ErrorEvent) -> None:
@@ -58,5 +64,6 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     dp.include_router(full_schedule.router)
     dp.include_router(zameny.router)
     dp.startup.register(_on_startup)
+    dp.shutdown.register(_on_shutdown)
     dp.errors.register(_on_error)
     return bot, dp
