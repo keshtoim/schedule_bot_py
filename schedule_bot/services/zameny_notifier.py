@@ -1,133 +1,162 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 from dataclasses import dataclass
-from typing import Literal
 
 from aiogram import Bot
 from aiogram.types import BufferedInputFile
 
 from ..config import config
 from ..parser.zameny_parser import ZamenyBlock
-from ..store.user_store import get_chats_for_group
-from ..utils.html import escape_html
+from ..store.user_store import get_chats_for_group, get_subscribed_groups
 from .group_reconcile import ZamenyAnomaly
+from .rich_message import send_rich_message_html
 from .schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
-from .zameny_view import format_anomaly_alert
+from .zameny_view import (
+    ZamenyDigest,
+    ZamenyDigestKind,
+    build_zameny_digest_rich_html,
+    format_anomaly_alert,
+    format_zameny_digest_plain,
+)
+
+# ======================================================================
+#  Дайджесты замен по группам: когда у подписанной группы появляются или
+#  меняются замены — присылаем актуальный список, оформленный как расписание.
+# ======================================================================
 
 
 @dataclass
-class SnapshotEntry:
-    date: str
-    weekday: str
-    group: str
-    pair_number: str
-    instead_of: str
-    replacement: str
-    room: str
+class GroupDigestState:
+    sig: str  # сигнатура текущих замен группы; "" = замен нет
+    dates: list[str]  # dd.mm.yyyy даты, на которые у группы сейчас есть замены
 
 
-Snapshot = dict[str, SnapshotEntry]
+DigestStore = dict[str, GroupDigestState]
 
-ChangeType = Literal["added", "changed", "removed"]
+
+def _blocks_for_group(blocks: list[ZamenyBlock], group: str) -> list[ZamenyBlock]:
+    """Только строки этой группы, без ставших пустыми блоков; стабильный порядок."""
+    result: list[ZamenyBlock] = []
+    for b in blocks:
+        rows = [r for r in b.rows if r.group == group]
+        if rows:
+            result.append(ZamenyBlock(weekday=b.weekday, date=b.date, rows=rows))
+    return result
+
+
+def _group_signature(group_blocks: list[ZamenyBlock]) -> str:
+    parts = [
+        f"{b.date}|{r.pair_number}|{r.instead_of}|{r.replacement}|{r.room}"
+        for b in group_blocks
+        for r in b.rows
+    ]
+    return "\n".join(sorted(parts))
 
 
 @dataclass
-class Change:
-    type: ChangeType
-    current: SnapshotEntry | None = None
-    previous: SnapshotEntry | None = None
+class _DigestDecision:
+    digest: ZamenyDigest | None
+    next: GroupDigestState
 
 
-def _snapshot_key(date: str, group: str, pair_number: str) -> str:
-    return f"{date}|{group}|{pair_number}"
+def diff_group_digest(
+    prev: GroupDigestState | None,
+    current_blocks: list[ZamenyBlock],
+    all_current_dates: set[str],
+) -> _DigestDecision:
+    """Чистый шаг решения для одной группы.
+     - сигнатура не изменилась → ничего не делаем;
+     - сигнатура изменилась и у группы всё ещё есть замены → уведомляем
+       ("new", если раньше замен не было, иначе "updated");
+     - сигнатура стала пустой → уведомляем только про даты, которые всё ещё
+       публикуются (настоящая отмена), а не про ушедшие из окна колледжа."""
+    sig = _group_signature(current_blocks)
+    dates = [b.date for b in current_blocks]
+    nxt = GroupDigestState(sig=sig, dates=dates)
+    before = prev or GroupDigestState(sig="", dates=[])
+
+    if sig == before.sig:
+        return _DigestDecision(digest=None, next=nxt)
+
+    cancelled_dates = [d for d in before.dates if d not in dates and d in all_current_dates]
+    has_current = len(current_blocks) > 0
+    if not has_current and not cancelled_dates:
+        return _DigestDecision(digest=None, next=nxt)
+
+    kind: ZamenyDigestKind = "cleared" if not has_current else ("new" if before.sig == "" else "updated")
+    return _DigestDecision(
+        digest=ZamenyDigest(group="", kind=kind, blocks=current_blocks, cancelled_dates=cancelled_dates),
+        next=nxt,
+    )
 
 
-def _build_snapshot(blocks: list[ZamenyBlock]) -> Snapshot:
-    snapshot: Snapshot = {}
-    for block in blocks:
-        for row in block.rows:
-            snapshot[_snapshot_key(block.date, row.group, row.pair_number)] = SnapshotEntry(
-                date=block.date,
-                weekday=block.weekday,
-                group=row.group,
-                pair_number=row.pair_number,
-                instead_of=row.instead_of,
-                replacement=row.replacement,
-                room=row.room,
-            )
-    return snapshot
+def _digest_store_path():
+    return config.data_path / "zameny-group-digests.json"
 
 
-def _entries_equal(a: SnapshotEntry, b: SnapshotEntry) -> bool:
-    return a.instead_of == b.instead_of and a.replacement == b.replacement and a.room == b.room
-
-
-def _diff_snapshots(previous: Snapshot, current: Snapshot) -> list[Change]:
-    """Колледж отслеживает лишь скользящее окно дат — когда оно сдвигается,
-    все строки со старыми датами исчезают разом. Это не отмена, поэтому
-    «пропавшая» строка считается отменой, только если её дата всё ещё есть
-    где-то в текущих данных (то есть период отслеживается, а выпала конкретно
-    эта строка)."""
-    changes: list[Change] = []
-    current_dates = {e.date for e in current.values()}
-
-    for key, cur in current.items():
-        prev = previous.get(key)
-        if prev is None:
-            changes.append(Change(type="added", current=cur))
-        elif not _entries_equal(prev, cur):
-            changes.append(Change(type="changed", current=cur, previous=prev))
-
-    for key, prev in previous.items():
-        if key in current:
-            continue
-        if prev.date not in current_dates:
-            continue  # весь период сдвинулся, это не отмена
-        changes.append(Change(type="removed", previous=prev))
-
-    return changes
-
-
-def _format_change(c: Change) -> str:
-    e = c.current or c.previous
-    assert e is not None
-    where = f"{e.weekday}, {e.date}, пара {e.pair_number}"
-
-    if c.type == "removed":
-        return f"{where}: замена отменена — всё по расписанию"
-
-    entry = c.current
-    assert entry is not None
-    if entry.replacement.strip().lower() == "нет":
-        return f"{where}: ❌ отменено (было: {escape_html(entry.instead_of)})"
-
-    room = f" {escape_html(entry.room)}" if entry.room else ""
-    verb = "замена обновлена" if c.type == "changed" else "новая замена"
-    return f"{where}: 🔁 {verb} — «{escape_html(entry.instead_of)}» → «{escape_html(entry.replacement)}»{room}"
-
-
-def _snapshot_path():
-    return config.data_path / "zameny-snapshot.json"
-
-
-def _load_snapshot() -> Snapshot | None:
+def _load_digest_store() -> DigestStore | None:
     try:
-        raw = json.loads(_snapshot_path().read_text("utf-8"))
+        raw = json.loads(_digest_store_path().read_text("utf-8"))
     except (OSError, ValueError):
         return None
-    return {key: SnapshotEntry(**value) for key, value in raw.items()}
+    return {group: GroupDigestState(**value) for group, value in raw.items()}
 
 
-def _save_snapshot(snapshot: Snapshot) -> None:
+def _save_digest_store(store: DigestStore) -> None:
     config.data_path.mkdir(parents=True, exist_ok=True)
-    raw = {key: vars(entry) for key, entry in snapshot.items()}
-    _snapshot_path().write_text(json.dumps(raw, ensure_ascii=False), "utf-8")
+    raw = {group: dataclasses.asdict(state) for group, state in store.items()}
+    _digest_store_path().write_text(json.dumps(raw, ensure_ascii=False, indent=2), "utf-8")
 
 
-# --- уведомления об опечатках в названии группы ------------------------
+async def _send_digest(bot: Bot, chat_id: int, digest: ZamenyDigest) -> None:
+    try:
+        await send_rich_message_html(chat_id, build_zameny_digest_rich_html(digest))
+    except Exception:  # noqa: BLE001
+        await bot.send_message(chat_id, format_zameny_digest_plain(digest))
+
+
+async def _check_group_zameny_digests(bot: Bot, blocks: list[ZamenyBlock]) -> None:
+    subscribed = await get_subscribed_groups()
+    if not subscribed:
+        return
+
+    all_current_dates = {b.date for b in blocks}
+    stored = _load_digest_store()
+
+    # Самый первый запуск: запоминаем, где стоит каждая подписанная группа, и
+    # никого не уведомляем — свежий деплой не должен разослать всю таблицу.
+    if stored is None:
+        seed: DigestStore = {}
+        for group in subscribed:
+            seed[group] = diff_group_digest(None, _blocks_for_group(blocks, group), all_current_dates).next
+        _save_digest_store(seed)
+        return
+
+    # Пересобираем с нуля, чтобы записи групп, которые больше никто не выбрал, отпали.
+    store: DigestStore = {}
+    for group in subscribed:
+        decision = diff_group_digest(stored.get(group), _blocks_for_group(blocks, group), all_current_dates)
+        store[group] = decision.next
+        if decision.digest is None:
+            continue
+
+        decision.digest.group = group
+        for chat_id in await get_chats_for_group(group):
+            try:
+                await _send_digest(bot, chat_id, decision.digest)
+            except Exception:
+                logging.exception("Замены: не удалось отправить дайджест чату %s", chat_id)
+
+    _save_digest_store(store)
+
+
+# ======================================================================
+#  Уведомления об опечатках в названии группы
+# ======================================================================
 
 
 def _anomaly_key(a: ZamenyAnomaly) -> str:
@@ -220,6 +249,9 @@ async def _check_for_zameny_anomalies(bot: Bot) -> None:
     _save_notified_anomalies(result.next_notified)
 
 
+# ======================================================================
+
+
 async def check_for_zameny_changes(bot: Bot) -> None:
     await _check_for_zameny_anomalies(bot)
 
@@ -229,41 +261,7 @@ async def check_for_zameny_changes(bot: Bot) -> None:
         logging.exception("Замены: не удалось получить данные для проверки изменений")
         return
 
-    current = _build_snapshot(blocks)
-    previous = _load_snapshot()
-
-    if previous is None:
-        # Самый первый запуск: сравнивать не с чем, а рассылать всю текущую
-        # таблицу замен всем — это спам. Просто запоминаем точку отсчёта.
-        _save_snapshot(current)
-        return
-
-    changes = _diff_snapshots(previous, current)
-    if not changes:
-        return
-
-    by_group: dict[str, list[Change]] = {}
-    for c in changes:
-        entry = c.current or c.previous
-        assert entry is not None
-        by_group.setdefault(entry.group, []).append(c)
-
-    for group, group_changes in by_group.items():
-        chat_ids = await get_chats_for_group(group)
-        if not chat_ids:
-            continue
-
-        text = "\n".join(
-            [f"🔔 <b>Изменения в заменах — {escape_html(group)}</b>", *(_format_change(c) for c in group_changes)]
-        )
-
-        for chat_id in chat_ids:
-            try:
-                await bot.send_message(chat_id, text)
-            except Exception:
-                logging.exception("Замены: не удалось уведомить чат %s", chat_id)
-
-    _save_snapshot(current)
+    await _check_group_zameny_digests(bot, blocks)
 
 
 _task: asyncio.Task | None = None
@@ -273,13 +271,16 @@ def start_zameny_watcher(bot: Bot) -> None:
     global _task
 
     async def _loop() -> None:
-        interval = config.notify_interval_minutes * 60
+        interval = max(1, config.notify_interval_hours) * 60 * 60
+        # Один прогон вскоре после старта (процесс мог долго лежать), потом
+        # каждые interval.
+        await asyncio.sleep(30)
         while True:
-            await asyncio.sleep(interval)
             try:
                 await check_for_zameny_changes(bot)
             except Exception:
                 logging.exception("Замены: сбой проверки изменений")
+            await asyncio.sleep(interval)
 
     _task = asyncio.create_task(_loop())
 

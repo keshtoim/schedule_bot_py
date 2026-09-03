@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 
@@ -10,9 +11,13 @@ os.environ.setdefault("BOT_TOKEN", "test")
 os.environ.setdefault("SCHEDULE_SOURCE", "scratch_samples/raspisanie.xlsx")
 os.environ.setdefault("ZAMENY_SOURCE", "scratch_samples/zameny.xlsx")
 
-from schedule_bot.parser.zameny_parser import ZamenyRow  # noqa: E402
+from schedule_bot.parser.zameny_parser import ZamenyBlock, ZamenyRow  # noqa: E402
 from schedule_bot.services.group_reconcile import ZamenyAnomaly  # noqa: E402
-from schedule_bot.services.zameny_notifier import select_fresh_anomalies  # noqa: E402
+from schedule_bot.services.zameny_notifier import diff_group_digest, select_fresh_anomalies  # noqa: E402
+from schedule_bot.services.zameny_view import (  # noqa: E402
+    build_zameny_digest_rich_html,
+    format_zameny_digest_plain,
+)
 
 failed = 0
 
@@ -55,6 +60,39 @@ check("next_notified держит обе после свежей", len(r4.next_n
 
 r5 = select_fresh_anomalies([], r4.next_notified)
 check("исчезнувшие аномалии выкинуты", not r5.fresh and len(r5.next_notified) == 0)
+
+# --- дайджест по группам --------------------------------------------
+def block(date: str, rows: list[tuple[str, str, str, str]]) -> ZamenyBlock:
+    return ZamenyBlock(
+        "Пятница", date, [ZamenyRow(g, f"{p}пара", p, was, repl, "") for g, p, was, repl in rows]
+    )
+
+
+G = "23-ИСП-1"
+dates1 = {"04.09.2026"}
+cur1 = [block("04.09.2026", [(G, "1", "МДК.02.01", "нет")])]
+
+d1 = diff_group_digest(None, cur1, dates1)
+check("новая группа с заменами -> new", d1.digest is not None and d1.digest.kind == "new")
+
+d2 = diff_group_digest(d1.next, cur1, dates1)
+check("сигнатура не изменилась -> нет дайджеста", d2.digest is None)
+
+cur2 = [block("04.09.2026", [(G, "1", "МДК.02.01", "нет"), (G, "2", "МДК.02.01", "нет")])]
+d3 = diff_group_digest(d1.next, cur2, dates1)
+check("добавлена пара -> updated", d3.digest is not None and d3.digest.kind == "updated" and len(d3.digest.blocks[0].rows) == 2)
+
+d4 = diff_group_digest(d3.next, [], dates1)
+check("сняли, пока дата публикуется -> cleared", d4.digest is not None and d4.digest.kind == "cleared")
+check("cleared перечисляет снятую дату", d4.digest is not None and d4.digest.cancelled_dates == ["04.09.2026"])
+
+d5 = diff_group_digest(d3.next, [], set())
+check("дата ушла из окна -> нет дайджеста", d5.digest is None and d5.next.sig == "")
+
+rich = build_zameny_digest_rich_html(dataclasses.replace(d3.digest, group=G))
+plain = format_zameny_digest_plain(dataclasses.replace(d3.digest, group=G))
+check("rich-дайджест рисует таблицу", "<table" in rich and G in rich)
+check("plain-дайджест рисуется", "Пятница, 04.09.2026" in plain and "Пара 1" in plain)
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)

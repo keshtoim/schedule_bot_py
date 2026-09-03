@@ -40,3 +40,8 @@ async def get_user_group(chat_id: int) -> str | None:
 async def get_chats_for_group(group: str) -> list[int]:
     """chat_id всех, кто сейчас подписан на `group` (выбрал её через /group)."""
     return [int(chat_id) for chat_id, g in _load().items() if g == group]
+
+
+async def get_subscribed_groups() -> list[str]:
+    """Различные группы, которые выбрал хотя бы один чат."""
+    return list(dict.fromkeys(_load().values()))

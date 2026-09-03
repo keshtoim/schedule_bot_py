@@ -30,10 +30,9 @@ class Config:
     zameny_source: str | None
     cache_ttl_minutes: int
     data_dir: str
-    # Как часто проверять замены на изменения и уведомлять подписавшихся.
-    # По умолчанию равно cache_ttl_minutes — чаще, чем обновляются данные,
-    # проверять смысла нет.
-    notify_interval_minutes: int
+    # Раз в сколько часов фоновый наблюдатель перепроверяет сайт колледжа на
+    # изменения в заменах и рассылает их подписанным группам. По умолчанию 3.
+    notify_interval_hours: int
 
     @property
     def data_path(self) -> Path:
@@ -60,7 +59,7 @@ def _load() -> Config:
         zameny_source=zameny_source,
         cache_ttl_minutes=cache_ttl_minutes,
         data_dir=os.getenv("DATA_DIR") or "data",
-        notify_interval_minutes=int(os.getenv("NOTIFY_INTERVAL_MINUTES") or cache_ttl_minutes),
+        notify_interval_hours=int(os.getenv("NOTIFY_INTERVAL_HOURS") or 3),
     )
 
 
