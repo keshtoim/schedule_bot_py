@@ -7,6 +7,7 @@ from aiogram.types import BotCommand, ErrorEvent
 
 from .config import config
 from .handlers import full_schedule, group, start, today, week, zameny
+from .utils.describe_error import describe_error
 
 # Наполняет меню команд "/" в Telegram. Это же заставляет работать нативную
 # кнопку "Start" (показывается до первого сообщения или после перезапуска
@@ -36,14 +37,13 @@ async def _on_error(event: ErrorEvent) -> None:
     # что бот замолчал. Все хендлеры уже повторяют временные сетевые ошибки,
     # так что сюда доходит только то, у чего повторы исчерпаны.
     update = event.update
-    logging.error("Unhandled error for update %s", update.update_id, exc_info=event.exception)
+    reason = describe_error(event.exception)
+    logging.error("Unhandled error for update %s: %s", update.update_id, reason, exc_info=event.exception)
 
     target = update.message or (update.callback_query.message if update.callback_query else None)
     if target is not None:
         try:
-            await target.answer(
-                "⚠️ Не получилось получить данные (проблема с сетью). Попробуйте ещё раз через минуту."
-            )
+            await target.answer(f"⚠️ Не получилось получить данные: {reason}")
         except Exception:  # noqa: BLE001
             pass
 
