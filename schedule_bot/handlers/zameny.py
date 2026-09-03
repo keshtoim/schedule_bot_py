@@ -5,53 +5,12 @@ from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, Message
 
 from ..keyboards import Button
-from ..services.group_reconcile import ZamenyAnomaly
 from ..services.schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
-from ..parser.zameny_parser import ZamenyRow
+from ..services.zameny_view import format_anomaly_alert, format_zameny_row
 from ..store.user_store import get_user_group
 from ..utils.html import escape_html
 
 router = Router(name="zameny")
-
-
-def _format_row(row: ZamenyRow) -> str:
-    is_cancelled = row.replacement.strip().lower() == "нет"
-    room = f" {escape_html(row.room)}" if row.room else ""
-    if is_cancelled:
-        return f"  Пара {row.pair_number}: ❌ <i>отменено (было: {escape_html(row.instead_of)})</i>"
-    return (
-        f"  Пара {row.pair_number}: 🔁 <i>«{escape_html(row.instead_of)}» → "
-        f"«{escape_html(row.replacement)}»{room}</i>"
-    )
-
-
-def _format_anomaly(a: ZamenyAnomaly, user_group: str) -> str:
-    lines: list[str] = []
-    for_user = a.likely_group == user_group
-
-    if for_user:
-        lines.append("⚠️ <b>Внимание: похоже, в файле замен опечатка в названии группы.</b>")
-        lines.append(
-            f"Замены на <b>{a.weekday}, {a.date}</b> записаны на группу «{escape_html(a.stated_group)}», "
-            f"но, судя по расписанию, это замены для <b>вашей</b> группы «{escape_html(a.likely_group)}»:"
-        )
-    else:
-        lines.append("⚠️ <b>Внимание: часть замен, возможно, не для вашей группы.</b>")
-        lines.append(
-            f"Замены на <b>{a.weekday}, {a.date}</b> записаны на «{escape_html(a.stated_group)}», "
-            f"но по расписанию они похожи на замены для «{escape_html(a.likely_group)}»:"
-        )
-
-    lines.append("")
-    lines.extend(_format_row(r) for r in a.rows)
-
-    if a.evidence:
-        lines.append("")
-        lines.append("<i>" + "; ".join(escape_html(e) for e in a.evidence) + ".</i>")
-
-    lines.append("")
-    lines.append("Ниже — оригинал файла замен, проверьте сами 👇")
-    return "\n".join(lines)
 
 
 async def send_zameny(message: Message) -> None:
@@ -69,7 +28,7 @@ async def send_zameny(message: Message) -> None:
         if not rows:
             continue
         lines.append(f"<b>{block.weekday}, {block.date}:</b>")
-        lines.extend(_format_row(r) for r in rows)
+        lines.extend(format_zameny_row(r) for r in rows)
 
     await message.answer(
         "\n".join(lines) if lines else f"Замен для группы <b>{escape_html(group)}</b> нет."
@@ -83,7 +42,7 @@ async def send_zameny(message: Message) -> None:
         return
 
     for a in relevant:
-        await message.answer(_format_anomaly(a, group))
+        await message.answer(format_anomaly_alert(a, group))
 
     try:
         file_path = await get_zameny_file_path()

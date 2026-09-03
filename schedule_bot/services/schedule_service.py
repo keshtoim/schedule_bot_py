@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -55,11 +56,19 @@ async def _fetch_data() -> CachedData:
     schedule = parse_schedule(schedule_sheet)
     zameny = parse_zameny(zameny_sheet)
 
+    # Best-effort — баг в проверке несоответствий не должен ломать обычную
+    # выдачу расписания и замен.
+    try:
+        anomalies = find_zameny_anomalies(schedule, zameny)
+    except Exception:
+        logging.exception("Не удалось проверить замены на несоответствия")
+        anomalies = []
+
     return CachedData(
         schedule=schedule,
         zameny=zameny,
         zameny_file_path=zameny_file,
-        anomalies=find_zameny_anomalies(schedule, zameny),
+        anomalies=anomalies,
         fetched_at=time.time(),
     )
 

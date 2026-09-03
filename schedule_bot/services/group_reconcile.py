@@ -196,8 +196,10 @@ def _resolve_group(
         if all_backed:
             return None
 
-    # Настоящая опечатка: ищем близкую реальную группу, чьё расписание
-    # подтверждает замены, а расписание указанной группы — нет.
+    # Настоящая опечатка: близкая реальная группа, чьё расписание объясняет
+    # *каждую* проверяемую замену блока, а расписание указанной группы — ни
+    # одной. Требование всего блока (а не одной строки) не даёт принять
+    # единичную легитимную межгрупповую / добавленную пару за ошибку в имени.
     candidates: list[tuple[str, list[str]]] = []
     for g in known:
         if g == stated_group:
@@ -226,7 +228,7 @@ def _resolve_group(
             if stated_sched and lessons_look_same(r.instead_of, stated_sched):
                 backed_by_stated += 1
 
-        if checkable > 0 and backed_by_candidate > 0 and backed_by_candidate >= backed_by_stated + 1:
+        if checkable > 0 and backed_by_stated == 0 and backed_by_candidate == checkable:
             candidates.append((g, evidence))
 
     if len(candidates) == 1:

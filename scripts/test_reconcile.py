@@ -14,6 +14,7 @@ from schedule_bot.services.group_reconcile import (
     lessons_look_same,
     normalize_group,
 )
+from schedule_bot.services.zameny_view import format_anomaly_alert
 
 failed = 0
 
@@ -80,6 +81,20 @@ check("нет аномалии, если группа совпадает", len(f
 zameny_homo = [ZamenyBlock("Пятница", "05.09.2025", [row("23-ИCП-1", "1", "что-то", "иначе")])]
 ha = find_zameny_anomalies(schedule, zameny_homo)
 check("гомоглиф найден", len(ha) == 1 and ha[0].kind == "homoglyph" and ha[0].likely_group == "23-ИСП-1")
+
+# --- неизвестная мусорная группа, сопоставить не с чем -> не угадываем
+zameny_garbage = [ZamenyBlock("Пятница", "05.09.2025", [row("неведомая", "1", "Химия Волкова", "х")])]
+check("нет аномалии для неразрешимой группы", len(find_zameny_anomalies(schedule, zameny_garbage)) == 0)
+
+# --- замена, добавляющая пару туда, где у группы пусто (пустое «вместо»),
+#     не должна помечаться
+zameny_added = [ZamenyBlock("Пятница", "05.09.2025", [row("24-ИСП-1", "2", "", "Консультация")])]
+check("нет аномалии при пустом «вместо»", len(find_zameny_anomalies(schedule, zameny_added)) == 0)
+
+# --- форматирование не падает и несёт главное -----------------------
+alert = format_anomaly_alert(anomalies[0], "23-ИСП-1")
+check("в тексте обе группы", "23-ИСП-2" in alert and "23-ИСП-1" in alert)
+check("нейтральный вариант работает", "23-ИСП-1" in format_anomaly_alert(anomalies[0]))
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)

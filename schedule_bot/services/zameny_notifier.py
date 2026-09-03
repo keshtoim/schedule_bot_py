@@ -7,12 +7,15 @@ from dataclasses import dataclass
 from typing import Literal
 
 from aiogram import Bot
+from aiogram.types import BufferedInputFile
 
 from ..config import config
 from ..parser.zameny_parser import ZamenyBlock
 from ..store.user_store import get_chats_for_group
 from ..utils.html import escape_html
-from .schedule_service import get_zameny
+from .group_reconcile import ZamenyAnomaly
+from .schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
+from .zameny_view import format_anomaly_alert
 
 
 @dataclass
@@ -124,7 +127,102 @@ def _save_snapshot(snapshot: Snapshot) -> None:
     _snapshot_path().write_text(json.dumps(raw, ensure_ascii=False), "utf-8")
 
 
+# --- уведомления об опечатках в названии группы ------------------------
+
+
+def _anomaly_key(a: ZamenyAnomaly) -> str:
+    rows = ";".join(
+        sorted(f"{r.pair_number}:{r.instead_of}>{r.replacement}@{r.room}" for r in a.rows)
+    )
+    return f"{a.date}|{a.stated_group}=>{a.likely_group}|{rows}"
+
+
+def _anomalies_state_path():
+    return config.data_path / "zameny-anomalies-notified.json"
+
+
+def _load_notified_anomalies() -> set[str] | None:
+    try:
+        return set(json.loads(_anomalies_state_path().read_text("utf-8")))
+    except (OSError, ValueError):
+        return None
+
+
+def _save_notified_anomalies(keys: set[str]) -> None:
+    config.data_path.mkdir(parents=True, exist_ok=True)
+    _anomalies_state_path().write_text(json.dumps(sorted(keys), ensure_ascii=False), "utf-8")
+
+
+@dataclass
+class FreshAnomalies:
+    fresh: list[ZamenyAnomaly]
+    next_notified: set[str]
+    seed_only: bool
+
+
+def select_fresh_anomalies(anomalies: list[ZamenyAnomaly], notified: set[str] | None) -> FreshAnomalies:
+    """Чистый шаг решения: какие аномалии новые с прошлого раза и каким должно
+    стать сохранённое множество «уже сообщили».
+     - notified is None (файла состояния нет) → молча засеять, никого не уведомлять;
+     - иначе → всё, чей ключ неизвестен, — свежее; как только появилось свежее,
+       сохраняем всё текущее множество, иначе просто выкидываем исчезнувшие ключи."""
+    current_keys = {_anomaly_key(a) for a in anomalies}
+    if notified is None:
+        return FreshAnomalies(fresh=[], next_notified=current_keys, seed_only=True)
+
+    fresh = [a for a in anomalies if _anomaly_key(a) not in notified]
+    next_notified = current_keys if fresh else {k for k in notified if k in current_keys}
+    return FreshAnomalies(fresh=fresh, next_notified=next_notified, seed_only=False)
+
+
+async def _check_for_zameny_anomalies(bot: Bot) -> None:
+    """Предупреждает подписчиков, когда замены завели под опечатанным именем
+    группы. Ключ — хеш содержимого: исправленная/переформулированная аномалия
+    уведомит снова, неизменная — никогда не повторяется."""
+    try:
+        anomalies = await get_zameny_anomalies()
+    except Exception:
+        logging.exception("Замены: не удалось получить данные для проверки несоответствий")
+        return
+
+    notified = _load_notified_anomalies()
+    result = select_fresh_anomalies(anomalies, notified)
+
+    if result.seed_only:
+        _save_notified_anomalies(result.next_notified)  # первый запуск — молча
+        return
+    if not result.fresh:
+        _save_notified_anomalies(result.next_notified)  # выкинуть исчезнувшие ключи
+        return
+
+    file_bytes: bytes | None = None
+    try:
+        file_bytes = (await get_zameny_file_path()).read_bytes()
+    except Exception:
+        logging.exception("Замены: не удалось прочитать файл для рассылки о несоответствии")
+
+    for a in result.fresh:
+        # Подписчики вероятно-правильной группы слышат «эти замены для вас»;
+        # подписчики опечатанного имени (если это тоже реальная группа) —
+        # «возможно, не для вас». Не пишем одному чату дважды.
+        likely_chats = await get_chats_for_group(a.likely_group)
+        stated_chats = [c for c in await get_chats_for_group(a.stated_group) if c not in likely_chats]
+        targets = [(c, a.likely_group) for c in likely_chats] + [(c, a.stated_group) for c in stated_chats]
+
+        for chat_id, viewer_group in targets:
+            try:
+                await bot.send_message(chat_id, format_anomaly_alert(a, viewer_group))
+                if file_bytes is not None:
+                    await bot.send_document(chat_id, BufferedInputFile(file_bytes, filename="zameny.xlsx"))
+            except Exception:
+                logging.exception("Замены: не удалось уведомить чат %s о несоответствии", chat_id)
+
+    _save_notified_anomalies(result.next_notified)
+
+
 async def check_for_zameny_changes(bot: Bot) -> None:
+    await _check_for_zameny_anomalies(bot)
+
     try:
         blocks = await get_zameny()
     except Exception:
