@@ -28,6 +28,13 @@ def resolve_pair_content(content: PairContent | None, numerator_week: bool) -> s
     return content.numerator if numerator_week else content.denominator
 
 
+def pair_sort_key(pair_number: str) -> int:
+    """Порядковый номер пары для сортировки: ведущие цифры ("2пара" -> 2),
+    иначе — в конец списка."""
+    m = re.match(r"\d+", pair_number)
+    return int(m.group()) if m else 999
+
+
 @dataclass
 class SchedulePair:
     pair: str  # "0", "1", "2"... ("0" = внеурочный слот перед первой парой)

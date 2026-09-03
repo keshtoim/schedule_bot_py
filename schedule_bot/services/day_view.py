@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
-from ..parser.schedule_parser import resolve_pair_content
-from ..parser.zameny_parser import ZamenyRow
+from ..parser.schedule_parser import pair_sort_key, resolve_pair_content
+from ..parser.zameny_parser import ZamenyBlock, ZamenyRow
 from ..utils.html import escape_html
 from ..utils.weekday import (
     add_days,
@@ -21,6 +21,51 @@ def _format_zameny_note(row: ZamenyRow) -> str:
         return f"   ❌ <i>Отменено (было: {escape_html(row.instead_of)})</i>"
     room = f" {escape_html(row.room)}" if row.room else ""
     return f"   🔁 <i>Вместо «{escape_html(row.instead_of)}» — «{escape_html(row.replacement)}»{room}</i>"
+
+
+def day_lesson_lines(day, group: str, numerator_week: bool, zameny_block: ZamenyBlock | None) -> list[str]:
+    """Строки занятий одного дня (без заголовка) для plain-HTML сообщения.
+    Отдельные пары расписания с наложенными заменами плюс пары, которые
+    замена добавила туда, где у группы по расписанию пусто."""
+    entries: list[tuple[int, str]] = []
+    scheduled: set[str] = set()
+    for pair in day.pairs:
+        text = resolve_pair_content(pair.by_group.get(group), numerator_week)
+        if not text:
+            continue
+        scheduled.add(pair.pair)
+
+        line = f"<b>Пара {pair.pair} ({pair.time_start}–{pair.time_end}):</b> {escape_html(text)}"
+        z_row = None
+        if zameny_block:
+            z_row = next(
+                (r for r in zameny_block.rows if r.pair_number == pair.pair and r.group == group), None
+            )
+        if z_row:
+            line += f"\n{_format_zameny_note(z_row)}"
+
+        entries.append((pair_sort_key(pair.pair), line))
+
+    # Замены, добавляющие пару туда, где у группы по расписанию пусто.
+    if zameny_block:
+        grid_by_num = {p.pair: p for p in day.pairs}
+        for r in zameny_block.rows:
+            if r.group != group or r.pair_number in scheduled:
+                continue
+            if r.replacement.strip().lower() == "нет":
+                continue
+            grid_pair = grid_by_num.get(r.pair_number)
+            when = f" ({grid_pair.time_start}–{grid_pair.time_end})" if grid_pair else ""
+            room = f" {escape_html(r.room)}" if r.room else ""
+            entries.append(
+                (
+                    pair_sort_key(r.pair_number),
+                    f"<b>Пара {r.pair_number}{when}:</b> ➕ <i>{escape_html(r.replacement)}{room}</i>",
+                )
+            )
+
+    entries.sort(key=lambda t: t[0])
+    return [line for _, line in entries]
 
 
 async def format_day(group: str, day_date: date) -> str:
@@ -41,26 +86,8 @@ async def format_day(group: str, day_date: date) -> str:
         lines.append("<i>Занятий нет (выходной по расписанию).</i>")
         return "\n".join(lines)
 
-    has_lessons = False
-    for pair in day.pairs:
-        text = resolve_pair_content(pair.by_group.get(group), numerator_week)
-        if not text:
-            continue
-        has_lessons = True
-
-        line = f"<b>Пара {pair.pair} ({pair.time_start}–{pair.time_end}):</b> {escape_html(text)}"
-        z_row = None
-        if zameny_block:
-            z_row = next(
-                (r for r in zameny_block.rows if r.pair_number == pair.pair and r.group == group), None
-            )
-        if z_row:
-            line += f"\n{_format_zameny_note(z_row)}"
-
-        lines.append(line)
-
-    if not has_lessons:
-        lines.append("<i>Занятий нет.</i>")
+    lesson_lines = day_lesson_lines(day, group, numerator_week, zameny_block)
+    lines.extend(lesson_lines or ["<i>Занятий нет.</i>"])
     return "\n".join(lines)
 
 

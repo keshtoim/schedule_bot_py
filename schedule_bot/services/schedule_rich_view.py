@@ -4,8 +4,8 @@ import asyncio
 import re
 from datetime import date
 
-from ..parser.schedule_parser import ScheduleDay, resolve_pair_content
-from ..parser.zameny_parser import ZamenyBlock
+from ..parser.schedule_parser import ScheduleDay, pair_sort_key, resolve_pair_content
+from ..parser.zameny_parser import ZamenyBlock, ZamenyRow
 from ..utils.weekday import (
     add_days,
     format_ddmmyyyy,
@@ -85,24 +85,50 @@ def _pair_row_html(
     )
 
 
+def _added_pair_row_html(row: ZamenyRow, grid_pair) -> str:
+    """Пара, которой нет в расписании группы, но её добавили заменой."""
+    time = f"{_esc(grid_pair.time_start)}–{_esc(grid_pair.time_end)}" if grid_pair else "—"
+    return (
+        f"<tr><td>{_esc(row.pair_number)}</td><td>{time}</td>"
+        f"<td>➕ {_esc(row.replacement)}</td><td>{_esc(row.room or '—')}</td></tr>"
+    )
+
+
 def _day_table_html(
     day: ScheduleDay | None, group: str, numerator_week: bool, zameny_block: ZamenyBlock | None
 ) -> str:
     if day is None:
         return "<p><i>Занятий нет (выходной по расписанию).</i></p>"
 
-    rows = [
-        row
-        for row in (_pair_row_html(p, group, numerator_week, zameny_block) for p in day.pairs)
-        if row is not None
-    ]
+    rows: list[tuple[int, str]] = []
+    scheduled: set[str] = set()
+    for p in day.pairs:
+        html = _pair_row_html(p, group, numerator_week, zameny_block)
+        if html is None:
+            continue
+        scheduled.add(p.pair)
+        rows.append((pair_sort_key(p.pair), html))
+
+    # Замены, добавляющие пару туда, где у группы по расписанию пусто.
+    if zameny_block:
+        grid_by_num = {p.pair: p for p in day.pairs}
+        for r in zameny_block.rows:
+            if r.group != group or r.pair_number in scheduled:
+                continue
+            if r.replacement.strip().lower() == "нет":
+                continue  # отмена несуществующей пары — показывать нечего
+            rows.append(
+                (pair_sort_key(r.pair_number), _added_pair_row_html(r, grid_by_num.get(r.pair_number)))
+            )
+
     if not rows:
         return "<p><i>Занятий нет.</i></p>"
 
+    rows.sort(key=lambda t: t[0])
     return (
         "<table bordered striped>"
         "<tr><th>№ пары</th><th>Время</th><th>Предмет</th><th>Преподаватель / Аудитория</th></tr>"
-        + "".join(rows)
+        + "".join(html for _, html in rows)
         + "</table>"
     )
 
