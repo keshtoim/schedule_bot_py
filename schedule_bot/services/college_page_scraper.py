@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import httpx
 from bs4 import BeautifulSoup
 
+from ..utils.retry import with_retry
+
 
 @dataclass
 class CollegeLinks:
@@ -23,11 +25,14 @@ async def fetch_college_links(page_url: str) -> CollegeLinks:
     *текст* ссылок на странице — он предсказуем: расписание очной формы
     начинается с «Расписание учебных занятий», замены — с «Замены». Заодно
     отсекается ссылка на заочное («ЗАОЧНОЙ») расписание, которое нам не нужно."""
-    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-        res = await client.get(page_url)
-        res.raise_for_status()
+    async def _fetch_html() -> str:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            res = await client.get(page_url)
+            res.raise_for_status()
+            return res.text
 
-    soup = BeautifulSoup(res.text, "lxml")
+    html = await with_retry(_fetch_html)
+    soup = BeautifulSoup(html, "lxml")
 
     schedule_url: str | None = None
     zameny_url: str | None = None
