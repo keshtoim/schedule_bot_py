@@ -7,11 +7,33 @@ from .workbook import Sheet
 
 
 @dataclass
+class AlternatingPair:
+    """Когда пара чередуется по чётности недели, две строки пары не
+    объединены: верхняя — числитель, нижняя — знаменатель."""
+
+    numerator: str
+    denominator: str
+
+
+# Обычно ячейка пары для группы — один урок, объединённый на обе строки пары.
+PairContent = str | AlternatingPair
+
+
+def resolve_pair_content(content: PairContent | None, numerator_week: bool) -> str:
+    """Текст пары для нужной чётности недели; content может быть без чередования."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return content.numerator if numerator_week else content.denominator
+
+
+@dataclass
 class SchedulePair:
     pair: str  # "0", "1", "2"... ("0" = внеурочный слот перед первой парой)
     time_start: str
     time_end: str
-    by_group: dict[str, str]  # имя группы -> сырой текст пары (предмет/преподаватель/кабинет)
+    by_group: dict[str, PairContent]  # имя группы -> текст пары (предмет/преподаватель/кабинет)
 
 
 @dataclass
@@ -101,7 +123,16 @@ def parse_schedule(sheet: Sheet) -> Schedule:
             time_start = start_times[0] if start_times else ""
             time_end = end_times[-1] if end_times else (start_times[-1] if start_times else "")
 
-            by_group = {name: sheet.text(r, col) for col, name in group_cols}
+            by_group: dict[str, PairContent] = {}
+            for col, group_name in group_cols:
+                top = sheet.text(r, col)
+                bottom = sheet.text(r + 1, col)
+                by_group[group_name] = (
+                    AlternatingPair(numerator=top, denominator=bottom)
+                    if top and bottom and top != bottom
+                    else (top or bottom)
+                )
+
             pairs.append(SchedulePair(pair=pair_num, time_start=time_start, time_end=time_end, by_group=by_group))
 
         if not pairs:

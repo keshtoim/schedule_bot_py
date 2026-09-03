@@ -3,9 +3,16 @@ from __future__ import annotations
 import asyncio
 from datetime import date
 
+from ..parser.schedule_parser import resolve_pair_content
 from ..parser.zameny_parser import ZamenyRow
 from ..utils.html import escape_html
-from ..utils.weekday import add_days, format_ddmmyyyy, monday_of_week, weekday_name
+from ..utils.weekday import (
+    add_days,
+    format_ddmmyyyy,
+    is_numerator_week,
+    monday_of_week,
+    weekday_name,
+)
 from .schedule_service import get_schedule, get_zameny
 
 
@@ -24,8 +31,10 @@ async def format_day(group: str, day_date: date) -> str:
 
     day = next((d for d in schedule.days if d.weekday == weekday), None)
     zameny_block = next((z for z in zameny if z.date == date_str), None)
+    numerator_week = is_numerator_week(day_date)
+    parity_label = "числитель" if numerator_week else "знаменатель"
 
-    lines = [f"<b>{weekday}, {date_str}:</b>"]
+    lines = [f"<b>{weekday}, {date_str} ({parity_label}):</b>"]
 
     if day is None:
         lines.append("<i>Занятий нет (выходной по расписанию).</i>")
@@ -33,7 +42,7 @@ async def format_day(group: str, day_date: date) -> str:
 
     has_lessons = False
     for pair in day.pairs:
-        text = pair.by_group.get(group)
+        text = resolve_pair_content(pair.by_group.get(group), numerator_week)
         if not text:
             continue
         has_lessons = True
