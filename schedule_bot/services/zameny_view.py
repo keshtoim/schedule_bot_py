@@ -10,6 +10,8 @@ def format_zameny_row(row: ZamenyRow) -> str:
     room = f" {escape_html(row.room)}" if row.room else ""
     if row.replacement.strip().lower() == "нет":
         return f"  Пара {row.pair_number}: ❌ <i>отменено (было: {escape_html(row.instead_of)})</i>"
+    if not row.instead_of.strip():
+        return f"  Пара {row.pair_number}: ➕ <i>{escape_html(row.replacement)}{room}</i>"
     return (
         f"  Пара {row.pair_number}: 🔁 <i>«{escape_html(row.instead_of)}» → "
         f"«{escape_html(row.replacement)}»{room}</i>"

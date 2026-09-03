@@ -23,8 +23,12 @@ class ZamenyBlock:
     rows: list[ZamenyRow]
 
 
+# Заголовок — "Изменение в расписании занятий на <день> <dd.mm.yyyy>г.",
+# иногда с хвостом: с 2026-27 уч. года там суффикс чётности, например
+# "...04.09.2026г. (числитель)". Матчим день + дату, хвост игнорируем; заодно
+# терпим множественное "Изменения".
 _HEADER_RE = re.compile(
-    r"^\s*Изменение в расписании занятий на\s+(\S+)\s+(\d{2}\.\d{2}\.\d{4})г?\.?\s*$",
+    r"Изменени[ея] в расписании занятий на\s+(\S+)\s+(\d{2}\.\d{2}\.\d{4})",
     re.IGNORECASE,
 )
 _COLUMN_HEADER_RE = re.compile(r"^ГРУППА$", re.IGNORECASE)
@@ -54,30 +58,44 @@ def _normalize_weekday(raw: str) -> str:
 def parse_zameny(sheet: Sheet) -> list[ZamenyBlock]:
     blocks: list[ZamenyBlock] = []
     current: ZamenyBlock | None = None
+    # Когда у группы замены на нескольких парах, имя группы стоит только в
+    # первой строке (колонка A), остальные пустые (не объединены). Протягиваем
+    # последнее имя вниз до следующего имени / пустой строки-разделителя / нового блока.
+    group = ""
 
     for r in range(1, sheet.max_row + 1):
         col_a = sheet.text(r, 1)
 
-        header = _HEADER_RE.match(col_a)
+        header = _HEADER_RE.search(col_a)
         if header:
             current = ZamenyBlock(weekday=_normalize_weekday(header.group(1)), date=header.group(2), rows=[])
             blocks.append(current)
+            group = ""
             continue
 
         if current is None:
             continue  # всё до первого заголовка с датой
 
         if _COLUMN_HEADER_RE.match(col_a):
+            group = ""
             continue  # строка "ГРУППА | ПАРА | ВМЕСТО | ЗАМЕНА | кабинет"
 
-        group = col_a
         pair = sheet.text(r, 2)
         instead_of = sheet.text(r, 3)
         replacement = sheet.text(r, 4)
         room = sheet.text(r, 5)
 
+        # Полностью пустая строка разделяет группы (например перед подвалом) —
+        # сбрасываем, чтобы поздняя случайная строка не унаследовала имя.
+        if not col_a and not pair and not instead_of and not replacement and not room:
+            group = ""
+            continue
+
+        if col_a:
+            group = col_a
+
         if not group or not _PAIR_RE.search(pair):
-            continue  # пустая строка-шаблон или подвал/подпись
+            continue  # строка-шаблон или подвал/подпись
 
         current.rows.append(
             ZamenyRow(
