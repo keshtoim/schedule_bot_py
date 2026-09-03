@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
+import time
 from pathlib import Path
 
 import httpx
@@ -53,5 +55,11 @@ async def resolve_local_file(source: str, cache_dir: Path, cache_file_name: str)
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     file_path = cache_dir / cache_file_name
-    file_path.write_bytes(data)
+
+    # Пишем в уникальный временный файл и переименовываем на место (атомарно
+    # в пределах тома), чтобы читатель никогда не увидел недописанный файл,
+    # даже если две загрузки одного cache_file_name наложились друг на друга.
+    tmp_path = cache_dir / f"{cache_file_name}.{os.getpid()}-{time.time_ns()}.tmp"
+    tmp_path.write_bytes(data)
+    os.replace(tmp_path, file_path)
     return file_path

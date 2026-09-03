@@ -20,6 +20,7 @@ class CachedData:
 
 
 _cache: CachedData | None = None
+_in_flight: asyncio.Task[CachedData] | None = None
 
 
 def _is_fresh(fetched_at: float) -> bool:
@@ -54,12 +55,25 @@ async def _fetch_data() -> CachedData:
     )
 
 
+async def _run_fetch() -> CachedData:
+    global _cache, _in_flight
+    try:
+        _cache = await _fetch_data()
+        return _cache
+    finally:
+        _in_flight = None
+
+
 async def get_data() -> CachedData:
-    global _cache
+    """Параллельные вызовы (например два быстрых нажатия кнопок) должны ждать
+    одну и ту же загрузку, а не запускать каждый свою — два писателя в один
+    файл кеша и приводили к ошибкам «битый zip»."""
+    global _in_flight
     if _cache and _is_fresh(_cache.fetched_at):
         return _cache
-    _cache = await _fetch_data()
-    return _cache
+    if _in_flight is None:
+        _in_flight = asyncio.ensure_future(_run_fetch())
+    return await _in_flight
 
 
 async def get_schedule() -> Schedule:
