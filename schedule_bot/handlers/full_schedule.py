@@ -11,6 +11,7 @@ from ..services.schedule_rich_view import build_full_schedule_html
 from .common import resolve_group
 
 router = Router(name="full_schedule")
+log = logging.getLogger(__name__)
 
 
 async def send_full_schedule_for(message: Message) -> None:
@@ -21,7 +22,7 @@ async def send_full_schedule_for(message: Message) -> None:
     try:
         await send_rich_message_html(message.chat.id, await build_full_schedule_html(group))
     except Exception:
-        logging.exception("sendRichMessage failed, falling back to plain HTML message")
+        log.warning("Общее расписание: rich-сообщение не ушло, шлю обычным текстом", exc_info=True)
         await message.answer(await format_full_schedule(group))
 
 

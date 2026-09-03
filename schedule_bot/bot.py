@@ -9,10 +9,13 @@ from aiogram.types import BotCommand, ErrorEvent
 from .config import config
 from .handlers import full_schedule, group, menu, start, today, week, zameny
 from .keyboards import build_main_menu
+from .middlewares import LoggingMiddleware
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .store.user_store import get_all_chats
 from .utils.describe_error import describe_error
 from .utils.html import escape_html
+
+log = logging.getLogger(__name__)
 
 # Наполняет меню команд "/" в Telegram. Это же заставляет работать нативную
 # кнопку "Start" (показывается до первого сообщения или после перезапуска
@@ -45,9 +48,11 @@ async def _notify_restart(bot: Bot) -> None:
 
     chats = await get_all_chats()
     if not chats:
+        log.info("Уведомление о перезапуске: подписчиков нет")
         return
 
-    logging.info("Уведомление о перезапуске: %d чат(ов)", len(chats))
+    log.info("Уведомляю о перезапуске: %d чат(ов)", len(chats))
+    sent = failed = 0
     for chat_id, group in chats:
         try:
             await bot.send_message(
@@ -56,22 +61,28 @@ async def _notify_restart(bot: Bot) -> None:
                 "Если она неверная — нажми кнопку с группой внизу и выбери заново.",
                 reply_markup=build_main_menu(group),
             )
+            sent += 1
         except Exception:
-            logging.warning("Не удалось уведомить чат %s о перезапуске", chat_id, exc_info=True)
+            failed += 1
+            log.warning("Не удалось уведомить чат %s о перезапуске", chat_id, exc_info=True)
         await asyncio.sleep(0.05)  # бережём лимиты Telegram
+    log.info("Уведомление о перезапуске разослано: %d ок, %d с ошибкой", sent, failed)
 
 
 async def _on_startup(bot: Bot) -> None:
+    log.info("Старт: настраиваю бота")
     try:
         await bot.set_my_commands(COMMANDS)
+        log.info("Меню команд обновлено (%d шт.)", len(COMMANDS))
     except Exception:
-        logging.exception("set_my_commands failed")
+        log.exception("Не удалось обновить меню команд")
     start_zameny_watcher(bot)
     global _restart_task
     _restart_task = asyncio.create_task(_notify_restart(bot))
 
 
 async def _on_shutdown() -> None:
+    log.info("Останавливаюсь…")
     stop_zameny_watcher()
 
 
@@ -82,7 +93,7 @@ async def _on_error(event: ErrorEvent) -> None:
     # так что сюда доходит только то, у чего повторы исчерпаны.
     update = event.update
     reason = describe_error(event.exception)
-    logging.error("Unhandled error for update %s: %s", update.update_id, reason, exc_info=event.exception)
+    log.error("Необработанная ошибка (update %s): %s", update.update_id, reason, exc_info=event.exception)
 
     target = update.message or (update.callback_query.message if update.callback_query else None)
     if target is not None:
@@ -95,6 +106,11 @@ async def _on_error(event: ErrorEvent) -> None:
 def create_bot() -> tuple[Bot, Dispatcher]:
     bot = Bot(config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher()
+
+    logging_mw = LoggingMiddleware()
+    dp.message.outer_middleware(logging_mw)
+    dp.callback_query.outer_middleware(logging_mw)
+
     dp.include_router(start.router)
     dp.include_router(group.router)
     dp.include_router(today.router)

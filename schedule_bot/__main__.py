@@ -2,9 +2,12 @@ import asyncio
 import logging
 
 from .bot import create_bot
+from .logging_setup import setup_logging
 from .utils.describe_error import describe_error
 
 _RETRY_DELAY_SEC = 10
+
+log = logging.getLogger("schedule_bot")
 
 
 async def _run() -> None:
@@ -18,18 +21,22 @@ async def _run() -> None:
     while True:
         attempt += 1
         try:
-            print("Bot started")
+            log.info("Запускаю поллинг (попытка %d)…", attempt)
             await dp.start_polling(bot)
             return
         except Exception as err:  # noqa: BLE001
-            logging.error("Не удалось запустить бота (попытка %d): %s", attempt, describe_error(err))
-            logging.error("Повтор через %d сек...", _RETRY_DELAY_SEC)
+            log.error("Не удалось запустить бота (попытка %d): %s", attempt, describe_error(err))
+            log.error("Повтор через %d с…", _RETRY_DELAY_SEC)
             await asyncio.sleep(_RETRY_DELAY_SEC)
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
-    asyncio.run(_run())
+    setup_logging()
+    log.info("=== schedule_bot запускается ===")
+    try:
+        asyncio.run(_run())
+    except (KeyboardInterrupt, SystemExit):
+        log.info("Остановлен вручную")
 
 
 if __name__ == "__main__":

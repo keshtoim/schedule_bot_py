@@ -13,13 +13,14 @@ from ..utils.weekday import today, tomorrow
 from .common import resolve_group
 
 router = Router(name="today")
+log = logging.getLogger(__name__)
 
 
 async def _send_day(message: Message, group: str, day_date: date) -> None:
     try:
         await send_rich_message_html(message.chat.id, await build_day_html(group, day_date))
     except Exception:
-        logging.exception("sendRichMessage failed, falling back to plain HTML message")
+        log.warning("День %s: rich-сообщение не ушло, шлю обычным текстом", day_date, exc_info=True)
         await message.answer(await format_day(group, day_date))
 
 

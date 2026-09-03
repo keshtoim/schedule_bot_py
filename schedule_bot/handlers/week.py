@@ -13,6 +13,7 @@ from ..utils.weekday import add_days, today
 from .common import resolve_group
 
 router = Router(name="week")
+log = logging.getLogger(__name__)
 
 
 async def send_week_for(message: Message, around: date) -> None:
@@ -23,7 +24,7 @@ async def send_week_for(message: Message, around: date) -> None:
     try:
         await send_rich_message_html(message.chat.id, await build_week_html(group, around))
     except Exception:
-        logging.exception("sendRichMessage failed, falling back to plain HTML message")
+        log.warning("Неделя (%s): rich-сообщение не ушло, шлю обычным текстом", around, exc_info=True)
         await message.answer(await format_week(group, around))
 
 

@@ -11,8 +11,11 @@ from ..parser.schedule_parser import Schedule, parse_schedule
 from ..parser.workbook import load_active_sheet
 from ..parser.zameny_parser import ZamenyBlock, parse_zameny
 from .college_page_scraper import fetch_college_links
+from ..utils.describe_error import describe_error
 from .file_source import resolve_local_file
 from .group_reconcile import ZamenyAnomaly, find_zameny_anomalies
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -40,6 +43,8 @@ async def _resolve_source_urls() -> tuple[str, str]:
 
 
 async def _fetch_data() -> CachedData:
+    started = time.time()
+    log.info("Обновляю данные: расписание + замены")
     cache_dir = config.data_path / "cache"
     schedule_src, zameny_src = await _resolve_source_urls()
 
@@ -55,13 +60,27 @@ async def _fetch_data() -> CachedData:
 
     schedule = parse_schedule(schedule_sheet)
     zameny = parse_zameny(zameny_sheet)
+    log.info(
+        "Разобрано за %.1f с: расписание — %d групп / %d дней; замены — %d блок(ов), %d строк",
+        time.time() - started,
+        len(schedule.groups),
+        len(schedule.days),
+        len(zameny),
+        sum(len(b.rows) for b in zameny),
+    )
 
     # Best-effort — баг в проверке несоответствий не должен ломать обычную
     # выдачу расписания и замен.
     try:
         anomalies = find_zameny_anomalies(schedule, zameny)
+        if anomalies:
+            log.warning(
+                "Замены: возможные опечатки в названиях групп — %d: %s",
+                len(anomalies),
+                ", ".join(f"{a.stated_group}→{a.likely_group}" for a in anomalies),
+            )
     except Exception:
-        logging.exception("Не удалось проверить замены на несоответствия")
+        log.exception("Не удалось проверить замены на несоответствия")
         anomalies = []
 
     return CachedData(
@@ -78,6 +97,9 @@ async def _run_fetch() -> CachedData:
     try:
         _cache = await _fetch_data()
         return _cache
+    except Exception as err:
+        log.error("Не удалось обновить данные: %s", describe_error(err), exc_info=True)
+        raise
     finally:
         _in_flight = None
 
@@ -88,9 +110,13 @@ async def get_data() -> CachedData:
     файл кеша и приводили к ошибкам «битый zip»."""
     global _in_flight
     if _cache and _is_fresh(_cache.fetched_at):
+        log.debug("Данные из кеша (возраст %.0f с)", time.time() - _cache.fetched_at)
         return _cache
     if _in_flight is None:
+        log.info("Кеш устарел или пуст — запускаю обновление")
         _in_flight = asyncio.ensure_future(_run_fetch())
+    else:
+        log.debug("Обновление уже идёт — жду его")
     return await _in_flight
 
 

@@ -23,6 +23,8 @@ from .zameny_view import (
     format_zameny_digest_plain,
 )
 
+log = logging.getLogger(__name__)
+
 # ======================================================================
 #  Дайджесты замен по группам: когда у подписанной группы появляются или
 #  меняются замены — присылаем актуальный список, оформленный как расписание.
@@ -134,10 +136,12 @@ async def _check_group_zameny_digests(bot: Bot, blocks: list[ZamenyBlock]) -> No
         for group in subscribed:
             seed[group] = diff_group_digest(None, _blocks_for_group(blocks, group), all_current_dates).next
         _save_digest_store(seed)
+        log.info("Дайджесты замен: первый прогон, запомнил состояние %d групп(ы)", len(seed))
         return
 
     # Пересобираем с нуля, чтобы записи групп, которые больше никто не выбрал, отпали.
     store: DigestStore = {}
+    notified_groups = 0
     for group in subscribed:
         decision = diff_group_digest(stored.get(group), _blocks_for_group(blocks, group), all_current_dates)
         store[group] = decision.next
@@ -145,12 +149,17 @@ async def _check_group_zameny_digests(bot: Bot, blocks: list[ZamenyBlock]) -> No
             continue
 
         decision.digest.group = group
-        for chat_id in await get_chats_for_group(group):
+        chats = await get_chats_for_group(group)
+        notified_groups += 1
+        log.info("Замены у «%s» изменились (%s) → уведомляю %d чат(ов)", group, decision.digest.kind, len(chats))
+        for chat_id in chats:
             try:
                 await _send_digest(bot, chat_id, decision.digest)
             except Exception:
-                logging.exception("Замены: не удалось отправить дайджест чату %s", chat_id)
+                log.exception("Замены: не удалось отправить дайджест чату %s", chat_id)
 
+    if not notified_groups:
+        log.info("Дайджесты замен: изменений у подписанных групп нет (%d групп проверено)", len(subscribed))
     _save_digest_store(store)
 
 
@@ -211,7 +220,7 @@ async def _check_for_zameny_anomalies(bot: Bot) -> None:
     try:
         anomalies = await get_zameny_anomalies()
     except Exception:
-        logging.exception("Замены: не удалось получить данные для проверки несоответствий")
+        log.exception("Замены: не удалось получить данные для проверки несоответствий")
         return
 
     notified = _load_notified_anomalies()
@@ -219,16 +228,22 @@ async def _check_for_zameny_anomalies(bot: Bot) -> None:
 
     if result.seed_only:
         _save_notified_anomalies(result.next_notified)  # первый запуск — молча
+        log.info("Опечатки в группах: первый прогон, запомнил %d аномалий(ю)", len(result.next_notified))
         return
     if not result.fresh:
         _save_notified_anomalies(result.next_notified)  # выкинуть исчезнувшие ключи
         return
 
+    log.warning(
+        "Опечатки в группах: %d новых — рассылаю (%s)",
+        len(result.fresh),
+        ", ".join(f"{a.stated_group}→{a.likely_group}" for a in result.fresh),
+    )
     file_bytes: bytes | None = None
     try:
         file_bytes = (await get_zameny_file_path()).read_bytes()
     except Exception:
-        logging.exception("Замены: не удалось прочитать файл для рассылки о несоответствии")
+        log.exception("Замены: не удалось прочитать файл для рассылки о несоответствии")
 
     for a in result.fresh:
         # Подписчики вероятно-правильной группы слышат «эти замены для вас»;
@@ -244,7 +259,7 @@ async def _check_for_zameny_anomalies(bot: Bot) -> None:
                 if file_bytes is not None:
                     await bot.send_document(chat_id, BufferedInputFile(file_bytes, filename="zameny.xlsx"))
             except Exception:
-                logging.exception("Замены: не удалось уведомить чат %s о несоответствии", chat_id)
+                log.exception("Замены: не удалось уведомить чат %s о несоответствии", chat_id)
 
     _save_notified_anomalies(result.next_notified)
 
@@ -253,12 +268,13 @@ async def _check_for_zameny_anomalies(bot: Bot) -> None:
 
 
 async def check_for_zameny_changes(bot: Bot) -> None:
+    log.info("Проверяю замены на изменения…")
     await _check_for_zameny_anomalies(bot)
 
     try:
         blocks = await get_zameny()
     except Exception:
-        logging.exception("Замены: не удалось получить данные для проверки изменений")
+        log.exception("Замены: не удалось получить данные для проверки изменений")
         return
 
     await _check_group_zameny_digests(bot, blocks)
@@ -272,6 +288,7 @@ def start_zameny_watcher(bot: Bot) -> None:
 
     async def _loop() -> None:
         interval = max(1, config.notify_interval_hours) * 60 * 60
+        log.info("Наблюдатель замен запущен (проверка раз в %d ч, первая через 30 с)", interval // 3600)
         # Один прогон вскоре после старта (процесс мог долго лежать), потом
         # каждые interval.
         await asyncio.sleep(30)
@@ -279,7 +296,7 @@ def start_zameny_watcher(bot: Bot) -> None:
             try:
                 await check_for_zameny_changes(bot)
             except Exception:
-                logging.exception("Замены: сбой проверки изменений")
+                log.exception("Замены: сбой проверки изменений")
             await asyncio.sleep(interval)
 
     _task = asyncio.create_task(_loop())
@@ -287,4 +304,5 @@ def start_zameny_watcher(bot: Bot) -> None:
 
 def stop_zameny_watcher() -> None:
     if _task is not None and not _task.done():
+        log.info("Останавливаю наблюдатель замен")
         _task.cancel()

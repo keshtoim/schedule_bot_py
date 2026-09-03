@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -7,6 +8,8 @@ import httpx
 from bs4 import BeautifulSoup
 
 from ..utils.retry import with_retry
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,7 +34,8 @@ async def fetch_college_links(page_url: str) -> CollegeLinks:
             res.raise_for_status()
             return res.text
 
-    html = await with_retry(_fetch_html)
+    log.info("Читаю ссылки на файлы со страницы колледжа: %s", page_url)
+    html = await with_retry(_fetch_html, name="страница колледжа")
     soup = BeautifulSoup(html, "lxml")
 
     schedule_url: str | None = None
@@ -48,8 +52,11 @@ async def fetch_college_links(page_url: str) -> CollegeLinks:
             zameny_url = href
 
     if not schedule_url:
+        log.error("На странице %s не нашёл ссылку на расписание (.xlsx)", page_url)
         raise ValueError(f"Could not find schedule (.xlsx) link on {page_url}")
     if not zameny_url:
+        log.error("На странице %s не нашёл ссылку на замены (.xlsx)", page_url)
         raise ValueError(f"Could not find zameny (.xlsx) link on {page_url}")
 
+    log.info("Ссылки найдены: расписание=%s | замены=%s", schedule_url, zameny_url)
     return CollegeLinks(schedule_url=schedule_url, zameny_url=zameny_url)

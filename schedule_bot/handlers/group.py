@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
@@ -9,6 +11,7 @@ from ..store.user_store import set_user_group
 from ..utils.html import escape_html
 
 router = Router(name="group")
+log = logging.getLogger(__name__)
 
 
 def _year_of(group: str) -> str:
@@ -61,6 +64,7 @@ async def handle_back(callback: CallbackQuery) -> None:
 async def handle_pick_group(callback: CallbackQuery) -> None:
     group = callback.data.split(":", 1)[1]
     await set_user_group(callback.message.chat.id, group)
+    log.info("Группа сохранена: chat=%s → %s", callback.message.chat.id, group)
     await callback.message.edit_text(f"Группа сохранена: <b>{escape_html(group)}</b>")
     await callback.answer()
     await callback.message.answer("Готово! Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))

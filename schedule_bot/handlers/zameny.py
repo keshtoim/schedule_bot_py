@@ -11,6 +11,7 @@ from ..utils.html import escape_html
 from .common import resolve_group
 
 router = Router(name="zameny")
+log = logging.getLogger(__name__)
 
 
 async def send_zameny(message: Message) -> None:
@@ -21,14 +22,17 @@ async def send_zameny(message: Message) -> None:
     blocks = await get_zameny()
     anomalies = await get_zameny_anomalies()
     lines: list[str] = []
+    days = 0
 
     for block in blocks:
         rows = [r for r in block.rows if r.group == group]
         if not rows:
             continue
+        days += 1
         lines.append(f"<b>{block.weekday}, {block.date}:</b>")
         lines.extend(format_zameny_row(r) for r in rows)
 
+    log.info("Замены для %s: %d дн. с заменами", group, days)
     await message.answer(
         "\n".join(lines) if lines else f"Замен для группы <b>{escape_html(group)}</b> нет."
     )
@@ -40,6 +44,7 @@ async def send_zameny(message: Message) -> None:
     if not relevant:
         return
 
+    log.warning("Замены для %s: показываю %d предупреждение(й) об опечатке в группе", group, len(relevant))
     for a in relevant:
         await message.answer(format_anomaly_alert(a, group))
 
@@ -47,7 +52,7 @@ async def send_zameny(message: Message) -> None:
         file_path = await get_zameny_file_path()
         await message.answer_document(BufferedInputFile(file_path.read_bytes(), filename="zameny.xlsx"))
     except Exception:
-        logging.exception("Не удалось отправить файл замен")
+        log.exception("Не удалось отправить файл замен группе %s", group)
 
 
 @router.message(Command("zameny"))
