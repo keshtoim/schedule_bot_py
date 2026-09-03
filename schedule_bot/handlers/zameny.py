@@ -8,7 +8,7 @@ from ..keyboards import Button
 from ..services.schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
 from ..services.zameny_view import format_anomaly_alert, format_zameny_row
 from ..utils.html import escape_html
-from .common import resolve_group
+from .common import resolve_group, thinking
 
 router = Router(name="zameny")
 log = logging.getLogger(__name__)
@@ -19,23 +19,24 @@ async def send_zameny(message: Message) -> None:
     if not group:
         return
 
-    blocks = await get_zameny()
-    anomalies = await get_zameny_anomalies()
-    lines: list[str] = []
-    days = 0
+    async with thinking(message):
+        blocks = await get_zameny()
+        anomalies = await get_zameny_anomalies()
+        lines: list[str] = []
+        days = 0
 
-    for block in blocks:
-        rows = [r for r in block.rows if r.group == group]
-        if not rows:
-            continue
-        days += 1
-        lines.append(f"<b>{block.weekday}, {block.date}:</b>")
-        lines.extend(format_zameny_row(r) for r in rows)
+        for block in blocks:
+            rows = [r for r in block.rows if r.group == group]
+            if not rows:
+                continue
+            days += 1
+            lines.append(f"<b>{block.weekday}, {block.date}:</b>")
+            lines.extend(format_zameny_row(r) for r in rows)
 
-    log.info("Замены для %s: %d дн. с заменами", group, days)
-    await message.answer(
-        "\n".join(lines) if lines else f"Замен для группы <b>{escape_html(group)}</b> нет."
-    )
+        log.info("Замены для %s: %d дн. с заменами", group, days)
+        await message.answer(
+            "\n".join(lines) if lines else f"Замен для группы <b>{escape_html(group)}</b> нет."
+        )
 
     # Замена касается пользователя, если его группа — это либо указанное имя,
     # либо вероятно-правильное: так он узнаёт и когда замены для него записали

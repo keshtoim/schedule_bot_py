@@ -8,7 +8,7 @@ from ..keyboards import Button
 from ..services.day_view import format_full_schedule
 from ..services.rich_message import send_rich_message_html
 from ..services.schedule_rich_view import build_full_schedule_html
-from .common import resolve_group
+from .common import resolve_group, thinking
 
 router = Router(name="full_schedule")
 log = logging.getLogger(__name__)
@@ -19,11 +19,12 @@ async def send_full_schedule_for(message: Message) -> None:
     if not group:
         return
 
-    try:
-        await send_rich_message_html(message.chat.id, await build_full_schedule_html(group))
-    except Exception:
-        log.warning("Общее расписание: rich-сообщение не ушло, шлю обычным текстом", exc_info=True)
-        await message.answer(await format_full_schedule(group))
+    async with thinking(message):
+        try:
+            await send_rich_message_html(message.chat.id, await build_full_schedule_html(group))
+        except Exception:
+            log.warning("Общее расписание: rich-сообщение не ушло, шлю обычным текстом", exc_info=True)
+            await message.answer(await format_full_schedule(group))
 
 
 @router.message(Command("schedule"))
