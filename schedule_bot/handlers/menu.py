@@ -1,15 +1,11 @@
 import logging
 
 from aiogram import F, Router
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import BufferedInputFile, Message
 
-from ..keyboards import Button
+from ..keyboards import Button, build_main_menu, build_more_menu
 from ..services.schedule_service import get_schedule_file_path, get_zameny_file_path
-from ..utils.weekday import add_days, today
-from .common import thinking
-from .full_schedule import send_full_schedule_for
-from .week import send_week_for
+from .common import resolve_group, thinking
 
 router = Router(name="menu")
 log = logging.getLogger(__name__)
@@ -17,25 +13,18 @@ log = logging.getLogger(__name__)
 
 @router.message(F.text == Button.MORE)
 async def handle_more(message: Message) -> None:
-    kb = InlineKeyboardBuilder()
-    kb.button(text="📋 Общее расписание", callback_data="more:schedule")
-    kb.button(text="➡️ Расписание на след. неделю", callback_data="more:nextweek")
-    kb.button(text="📄 Файл расписания (как на сайте)", callback_data="more:schedule_file")
-    kb.button(text="📄 Файл замен (как на сайте)", callback_data="more:zameny_file")
-    kb.adjust(1)
-    await message.answer("Что показать?", reply_markup=kb.as_markup())
+    group = await resolve_group(message)
+    if not group:
+        return
+    await message.answer("Ещё:", reply_markup=build_more_menu())
 
 
-@router.callback_query(F.data == "more:schedule")
-async def handle_more_schedule(callback: CallbackQuery) -> None:
-    await callback.answer()
-    await send_full_schedule_for(callback.message)
-
-
-@router.callback_query(F.data == "more:nextweek")
-async def handle_more_nextweek(callback: CallbackQuery) -> None:
-    await callback.answer()
-    await send_week_for(callback.message, add_days(today(), 7))
+@router.message(F.text == Button.BACK)
+async def handle_back(message: Message) -> None:
+    group = await resolve_group(message)
+    if not group:
+        return
+    await message.answer("Меню:", reply_markup=build_main_menu(group))
 
 
 async def _send_source_file(message: Message, kind: str, filename: str, get_path) -> None:
@@ -50,13 +39,11 @@ async def _send_source_file(message: Message, kind: str, filename: str, get_path
             await message.answer(f"⚠️ Не получилось отправить файл «{kind}». Попробуйте ещё раз позже.")
 
 
-@router.callback_query(F.data == "more:schedule_file")
-async def handle_more_schedule_file(callback: CallbackQuery) -> None:
-    await callback.answer()
-    await _send_source_file(callback.message, "расписание", "raspisanie.xlsx", get_schedule_file_path)
+@router.message(F.text == Button.SCHEDULE_FILE)
+async def handle_schedule_file(message: Message) -> None:
+    await _send_source_file(message, "расписание", "raspisanie.xlsx", get_schedule_file_path)
 
 
-@router.callback_query(F.data == "more:zameny_file")
-async def handle_more_zameny_file(callback: CallbackQuery) -> None:
-    await callback.answer()
-    await _send_source_file(callback.message, "замены", "zameny.xlsx", get_zameny_file_path)
+@router.message(F.text == Button.ZAMENY_FILE)
+async def handle_zameny_file(message: Message) -> None:
+    await _send_source_file(message, "замены", "zameny.xlsx", get_zameny_file_path)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 
-from schedule_bot.keyboards import Button, build_main_menu, group_button_text
+from schedule_bot.keyboards import Button, build_main_menu, build_more_menu, group_button_text
 
 failed = 0
 
@@ -38,6 +38,17 @@ check("6 кнопок", len(t) == 6)
 # --- матчинг кнопки группы по префиксу -------------------------------
 check("текст кнопки группы совпадает с префиксом", group_button_text("24-ТМ").startswith(Button.GROUP_PREFIX))
 check("«👥 24-ТМ».startswith(префикс)", "👥 24-ТМ".startswith(Button.GROUP_PREFIX))
+
+# --- подменю «Ещё»: то, что ушло с главной клавиатуры, — здесь ---------
+more = build_more_menu()
+mt = texts(more)
+check(
+    "подменю содержит общее расписание/след. неделю/файлы",
+    all(b in mt for b in (Button.FULL_SCHEDULE, Button.NEXT_WEEK, Button.SCHEDULE_FILE, Button.ZAMENY_FILE)),
+)
+check("в подменю есть «Назад»", Button.BACK in mt)
+check("в подменю нет кнопок главного меню", not any(b in mt for b in (Button.TODAY, Button.TOMORROW, Button.MORE)))
+check("подменю закреплено", more.is_persistent is True)
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)
