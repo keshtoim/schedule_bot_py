@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 class CachedData:
     schedule: Schedule
     zameny: list[ZamenyBlock]
+    schedule_file_path: Path
     zameny_file_path: Path
     anomalies: list[ZamenyAnomaly]
     fetched_at: float
@@ -86,6 +87,7 @@ async def _fetch_data() -> CachedData:
     return CachedData(
         schedule=schedule,
         zameny=zameny,
+        schedule_file_path=schedule_file,
         zameny_file_path=zameny_file,
         anomalies=anomalies,
         fetched_at=time.time(),
@@ -135,3 +137,8 @@ async def get_zameny_anomalies() -> list[ZamenyAnomaly]:
 async def get_zameny_file_path() -> Path:
     """Локальный путь к текущей закешированной книге замен — чтобы отдавать её пользователям как есть."""
     return (await get_data()).zameny_file_path
+
+
+async def get_schedule_file_path() -> Path:
+    """Локальный путь к текущей закешированной книге расписания — чтобы отдавать её пользователям как есть."""
+    return (await get_data()).schedule_file_path
