@@ -1,0 +1,47 @@
+# Залоченные версии всех зависимостей для воспроизводимого деплоя.
+#
+# Источник ПРЯМЫХ зависимостей — pyproject.toml. Этот файл — полный набор
+# с транзитивными, закреплённый на конкретных версиях (проверено: бот
+# работает, тесты проходят именно на них).
+#
+# Установка на сервере:
+#     pip install -r requirements.txt
+#     pip install --no-deps .        # сам пакет schedule_bot, без пере-резолва
+#     python -m schedule_bot
+#
+# Обновление лока (когда есть доступ к PyPI) — из pyproject.toml:
+#     uv pip compile pyproject.toml -o requirements.txt
+#   либо:
+#     pip-compile pyproject.toml -o requirements.txt
+
+# --- прямые зависимости (см. pyproject.toml) ---
+aiogram==3.31.0
+beautifulsoup4==4.15.0
+httpx==0.28.1
+lxml==6.1.3
+openpyxl==3.1.5
+python-dotenv==1.2.3
+
+# --- транзитивные ---
+aiofiles==25.1.0
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+annotated-types==0.8.0
+anyio==4.15.0
+attrs==26.1.0
+certifi==2026.7.22
+et-xmlfile==2.0.0
+frozenlist==1.8.0
+h11==0.16.0
+httpcore==1.0.9
+idna==3.19
+magic-filter==1.0.12
+multidict==6.7.1
+propcache==0.5.2
+pydantic==2.13.5
+pydantic-core==2.46.5
+soupsieve==2.9.2
+typing-extensions==4.16.0
+typing-inspection==0.4.4
+yarl==1.24.5
