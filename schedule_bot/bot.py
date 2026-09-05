@@ -6,6 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand, ErrorEvent
 
+from .assets import photo
 from .config import config
 from .handlers import full_schedule, group, menu, start, today, week, zameny
 from .keyboards import build_main_menu
@@ -52,15 +53,23 @@ async def _notify_restart(bot: Bot) -> None:
         return
 
     log.info("Уведомляю о перезапуске: %d чат(ов)", len(chats))
+    pic = photo("updated")
+    pic_file_id: str | None = None  # первую отправку кешируем, дальше по file_id
     sent = failed = 0
     for chat_id, group in chats:
+        text = (
+            f"♻️ Бот перезапущён. Твоя группа — <b>{escape_html(group)}</b>.\n"
+            "Если она неверная — нажми кнопку с группой внизу и выбери заново."
+        )
+        kb = build_main_menu(group)
+        media = pic_file_id or pic
         try:
-            await bot.send_message(
-                chat_id,
-                f"♻️ Бот перезапущён. Твоя группа — <b>{escape_html(group)}</b>.\n"
-                "Если она неверная — нажми кнопку с группой внизу и выбери заново.",
-                reply_markup=build_main_menu(group),
-            )
+            if media is not None:
+                msg = await bot.send_photo(chat_id, media, caption=text, reply_markup=kb)
+                if pic_file_id is None and msg.photo:
+                    pic_file_id = msg.photo[-1].file_id
+            else:
+                await bot.send_message(chat_id, text, reply_markup=kb)
             sent += 1
         except Exception:
             failed += 1

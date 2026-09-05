@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="853" viewBox="0 0 480 400" role="img" aria-label="Карточка группы внутри круговой стрелки обновления">
+  <rect width="480" height="400" fill="#F3F4F8"/>
+
+  <path d="M 263 77 A 130 130 0 1 1 217 77" fill="none" stroke="#2B4ACB" stroke-width="10" stroke-linecap="round"/>
+  <path d="M217 77 L202 90 L198 70 Z" fill="#2B4ACB"/>
+
+  <g transform="translate(159,160)">
+    <rect x="0" y="0" width="162" height="90" rx="16" fill="#FFFFFF" stroke="#20232E" stroke-width="3.6"/>
+    <circle cx="27" cy="30" r="8" fill="#2B4ACB"/>
+    <rect x="46" y="23" width="86" height="13" rx="6.5" fill="#CDD1DC"/>
+    <rect x="18" y="52" width="126" height="22" rx="11" fill="#2B4ACB"/>
+    <rect x="30" y="59" width="26" height="8" rx="4" fill="#FFFFFF"/>
+    <rect x="63" y="59" width="44" height="8" rx="4" fill="#FFFFFF"/>
+    <rect x="114" y="59" width="14" height="8" rx="4" fill="#FFFFFF"/>
+  </g>
+
+  <g fill="#FF4D6D">
+    <path d="M92 150 l4 9.4 l9.4 4 l-9.4 4 l-4 9.4 l-4 -9.4 l-9.4 -4 l9.4 -4 z"/>
+    <path d="M396 246 l5 11.6 l11.6 5 l-11.6 5 l-5 11.6 l-5 -11.6 l-11.6 -5 l11.6 -5 z"/>
+    <path d="M250 356 l3.4 7.8 l7.8 3.4 l-7.8 3.4 l-3.4 7.8 l-3.4 -7.8 l-7.8 -3.4 l7.8 -3.4 z"/>
+  </g>
+</svg>

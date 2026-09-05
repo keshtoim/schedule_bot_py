@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="853" viewBox="0 0 480 400" role="img" aria-label="Бумажный самолётик, сложенный из листа расписания, летит к телефону">
+  <rect width="480" height="400" fill="#F3F4F8"/>
+  <g stroke="#C4C9D6" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M96 214 q -34 4 -58 -8"/>
+    <path d="M112 236 q -40 8 -72 -2" stroke-dasharray="1 12"/>
+    <path d="M130 256 q -34 10 -60 4" stroke-dasharray="1 12"/>
+  </g>
+  <g transform="translate(114,116) rotate(-15)">
+    <path d="M0 96 L250 4 L130 74 Z" fill="#FFFFFF" stroke="#20232E" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M0 96 L130 74 L104 160 Z" fill="#DDE3F6" stroke="#20232E" stroke-width="3.4" stroke-linejoin="round"/>
+    <path d="M130 74 L58 100" stroke="#20232E" stroke-width="2.6" fill="none"/>
+    <g stroke-linecap="round">
+      <line x1="58" y1="56" x2="150" y2="22" stroke="#9DAAE6" stroke-width="4"/>
+      <line x1="68" y1="68" x2="142" y2="40" stroke="#9DAAE6" stroke-width="4"/>
+      <line x1="78" y1="80" x2="132" y2="60" stroke="#FF4D6D" stroke-width="4.5"/>
+    </g>
+  </g>
+  <g transform="translate(40,282)">
+    <rect x="0" y="0" width="70" height="106" rx="15" fill="#FFFFFF" stroke="#20232E" stroke-width="3.4"/>
+    <rect x="14" y="17" width="42" height="10" rx="5" fill="#2B4ACB"/>
+    <rect x="14" y="37" width="42" height="8" rx="4" fill="#CDD1DC"/>
+    <rect x="14" y="55" width="30" height="8" rx="4" fill="#FF4D6D"/>
+    <rect x="14" y="73" width="42" height="8" rx="4" fill="#CDD1DC"/>
+  </g>
+  <path d="M410 50 l4.8 11.2 l11.2 4.8 l-11.2 4.8 l-4.8 11.2 l-4.8 -11.2 l-11.2 -4.8 l11.2 -4.8 z" fill="#FF4D6D"/>
+</svg>
