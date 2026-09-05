@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+from ..assets import photo
 from ..keyboards import Button
 from ..services.day_view import format_full_schedule
 from ..services.rich_message import send_rich_message_html
@@ -20,6 +21,15 @@ async def send_full_schedule_for(message: Message) -> None:
         return
 
     async with thinking(message):
+        pic = photo("schedule")
+        if pic is not None:
+            try:
+                await message.answer_photo(
+                    pic, caption="Пары, которые чередуются по неделям, — в двух вариантах: "
+                    "<b>Ч</b> числитель и <b>З</b> знаменатель."
+                )
+            except Exception:
+                log.warning("Не отправилось фото для /schedule", exc_info=True)
         try:
             await send_rich_message_html(message.chat.id, await build_full_schedule_html(group))
         except Exception:

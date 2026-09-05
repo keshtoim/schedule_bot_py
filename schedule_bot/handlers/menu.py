@@ -1,10 +1,12 @@
 import logging
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, Message
 
 from ..keyboards import Button, build_main_menu, build_more_menu
 from ..services.schedule_service import get_schedule_file_path, get_zameny_file_path
+from ..store.user_store import get_user_group
 from .common import resolve_group, thinking
 
 router = Router(name="menu")
@@ -25,6 +27,12 @@ async def handle_back(message: Message) -> None:
     if not group:
         return
     await message.answer("Меню:", reply_markup=build_main_menu(group))
+
+
+@router.message(Command("menu"))
+async def handle_menu(message: Message) -> None:
+    group = await get_user_group(message.chat.id)
+    await message.answer("Кнопки на месте 👇", reply_markup=build_main_menu(group))
 
 
 async def _send_source_file(message: Message, kind: str, filename: str, get_path) -> None:

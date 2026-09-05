@@ -4,6 +4,7 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, Message
 
+from ..assets import photo
 from ..keyboards import Button
 from ..services.schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
 from ..services.zameny_view import format_anomaly_alert, format_zameny_row
@@ -34,9 +35,18 @@ async def send_zameny(message: Message) -> None:
             lines.extend(format_zameny_row(r) for r in rows)
 
         log.info("Замены для %s: %d дн. с заменами", group, days)
-        await message.answer(
-            "\n".join(lines) if lines else f"Замен для группы <b>{escape_html(group)}</b> нет."
-        )
+        if lines:
+            await message.answer("\n".join(lines))
+        else:
+            no_zameny = f"Замен для группы <b>{escape_html(group)}</b> нет — всё по расписанию."
+            pic = photo("zameny_ok")
+            if pic is not None:
+                try:
+                    await message.answer_photo(pic, caption=no_zameny)
+                except Exception:
+                    await message.answer(no_zameny)
+            else:
+                await message.answer(no_zameny)
 
     # Замена касается пользователя, если его группа — это либо указанное имя,
     # либо вероятно-правильное: так он узнаёт и когда замены для него записали

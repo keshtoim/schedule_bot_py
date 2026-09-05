@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="853" viewBox="0 0 480 400" role="img" aria-label="Лист расписания с большой галочкой в кружке — замен нет">
+  <rect width="480" height="400" fill="#F3F4F8"/>
+  <g transform="translate(150,86)">
+    <rect x="0" y="0" width="150" height="200" rx="10" fill="#FFFFFF" stroke="#20232E" stroke-width="3.6"/>
+    <rect x="22" y="26" width="80" height="12" rx="6" fill="#20232E"/>
+    <rect x="22" y="58" width="106" height="11" rx="5.5" fill="#2B4ACB"/>
+    <rect x="22" y="82" width="106" height="11" rx="5.5" fill="#CDD1DC"/>
+    <rect x="22" y="106" width="82" height="11" rx="5.5" fill="#2B4ACB"/>
+    <rect x="22" y="130" width="106" height="11" rx="5.5" fill="#CDD1DC"/>
+  </g>
+  <circle cx="316" cy="292" r="47" fill="#2B4ACB"/>
+  <path d="M295 293 l15 15 l27 -31" fill="none" stroke="#FFFFFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M356 92 l5 11.6 l11.6 5 l-11.6 5 l-5 11.6 l-5 -11.6 l-11.6 -5 l11.6 -5 z" fill="#FF4D6D"/>
+</svg>

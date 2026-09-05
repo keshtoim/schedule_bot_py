@@ -28,7 +28,8 @@ def group_button_text(group: str) -> str:
 
 def build_main_menu(group: str | None) -> ReplyKeyboardMarkup:
     """Клавиатура под пользователя: без группы — одна кнопка «Запустить»,
-    с группой — полное меню, где кнопка группы показывает её название."""
+    с группой — полное меню, где кнопка группы показывает её название.
+    Без is_persistent — Telegram даёт свернуть клавиатуру своей иконкой."""
     if not group:
         keyboard = [[KeyboardButton(text=Button.LAUNCH)]]
     else:
@@ -37,11 +38,11 @@ def build_main_menu(group: str | None) -> ReplyKeyboardMarkup:
             [KeyboardButton(text=Button.WEEK), KeyboardButton(text=Button.ZAMENY)],
             [KeyboardButton(text=group_button_text(group)), KeyboardButton(text=Button.MORE)],
         ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, is_persistent=True)
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 
 def build_more_menu() -> ReplyKeyboardMarkup:
-    """Подменю «Ещё»: подменяет нижнюю клавиатуру на реже нужные разделы,
+    """Подменю «Ещё»: подменяет нижнюю клавиатуру на реже нужные разделы.
     «Назад» возвращает build_main_menu."""
     keyboard = [
         [KeyboardButton(text=Button.FULL_SCHEDULE)],
@@ -49,4 +50,4 @@ def build_more_menu() -> ReplyKeyboardMarkup:
         [KeyboardButton(text=Button.SCHEDULE_FILE), KeyboardButton(text=Button.ZAMENY_FILE)],
         [KeyboardButton(text=Button.BACK)],
     ]
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True, is_persistent=True)
+    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

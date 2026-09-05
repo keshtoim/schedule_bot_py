@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="853" viewBox="0 0 480 400" role="img" aria-label="Ячейка расписания с двумя вариантами: пара чередуется по неделям">
+  <rect width="480" height="400" fill="#F3F4F8"/>
+  <rect x="80" y="84" width="320" height="232" rx="18" fill="#FFFFFF" stroke="#20232E" stroke-width="3.6"/>
+  <rect x="82" y="132" width="157" height="182" fill="#DDE3F6"/>
+  <rect x="241" y="132" width="157" height="182" fill="#FFD9E0"/>
+  <line x1="82" y1="130" x2="398" y2="130" stroke="#20232E" stroke-width="2.6"/>
+  <line x1="240" y1="130" x2="240" y2="314" stroke="#20232E" stroke-width="2.6"/>
+  <rect x="104" y="102" width="128" height="12" rx="6" fill="#CDD1DC"/>
+
+  <g fill="#2B4ACB">
+    <rect x="104" y="166" width="110" height="16" rx="8"/>
+    <rect x="104" y="196" width="78" height="16" rx="8"/>
+  </g>
+  <rect x="104" y="256" width="94" height="11" rx="5.5" fill="#9DAAE6"/>
+
+  <g fill="#FF4D6D">
+    <rect x="264" y="166" width="78" height="16" rx="8"/>
+    <rect x="264" y="196" width="110" height="16" rx="8"/>
+  </g>
+  <rect x="264" y="256" width="94" height="11" rx="5.5" fill="#F5A9B8"/>
+
+  <g transform="translate(240,344)">
+    <circle cx="0" cy="0" r="24" fill="#FFFFFF" stroke="#20232E" stroke-width="3.4"/>
+    <path d="M-11 -4 h16 m-5 -6 l6 6 l-6 6" fill="none" stroke="#20232E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M11 6 h-16 m5 -6 l-6 6 l6 6" fill="none" stroke="#20232E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <path d="M410 62 l4.8 11.2 l11.2 4.8 l-11.2 4.8 l-4.8 11.2 l-4.8 -11.2 l-11.2 -4.8 l11.2 -4.8 z" fill="#FF4D6D"/>
+</svg>

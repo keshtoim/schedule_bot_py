@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="853" viewBox="0 0 480 400" role="img" aria-label="Лист расписания с загнутым углом и восклицательным знаком в кружке — сайт не ответил">
+  <rect width="480" height="400" fill="#F3F4F8"/>
+  <g transform="translate(150,84)">
+    <path d="M0 10 A10 10 0 0 1 10 0 H110 L150 40 V190 A10 10 0 0 1 140 200 H10 A10 10 0 0 1 0 190 Z" fill="#FFFFFF" stroke="#20232E" stroke-width="3.6" stroke-linejoin="round"/>
+    <path d="M110 0 L110 40 L150 40 Z" fill="#E4E7F0" stroke="#20232E" stroke-width="3" stroke-linejoin="round"/>
+    <rect x="24" y="70" width="100" height="11" rx="5.5" fill="#CDD1DC"/>
+    <rect x="24" y="94" width="100" height="11" rx="5.5" fill="#CDD1DC"/>
+    <rect x="24" y="118" width="64" height="11" rx="5.5" fill="#CDD1DC"/>
+  </g>
+  <circle cx="318" cy="286" r="47" fill="#FF4D6D"/>
+  <rect x="311" y="260" width="14" height="32" rx="7" fill="#FFFFFF"/>
+  <circle cx="318" cy="306" r="7.5" fill="#FFFFFF"/>
+</svg>

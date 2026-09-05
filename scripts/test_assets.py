@@ -18,7 +18,7 @@ def check(name: str, cond: bool) -> None:
         failed += 1
 
 
-EXPECTED = ["welcome", "updated"]
+EXPECTED = ["welcome", "updated", "schedule", "zameny_ok", "offline"]
 
 for name in EXPECTED:
     svg = _DIR / f"{name}.svg"

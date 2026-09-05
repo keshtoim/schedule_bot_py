@@ -13,7 +13,7 @@ from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .store.user_store import get_all_chats
-from .utils.describe_error import describe_error
+from .utils.describe_error import describe_error, is_network_error
 from .utils.html import escape_html
 
 log = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ COMMANDS = [
     BotCommand(command="nextweek", description="Расписание на следующую неделю"),
     BotCommand(command="schedule", description="Общее расписание (числитель и знаменатель)"),
     BotCommand(command="zameny", description="Замены"),
+    BotCommand(command="menu", description="Показать кнопки меню"),
 ]
 
 
@@ -105,11 +106,18 @@ async def _on_error(event: ErrorEvent) -> None:
     log.error("Необработанная ошибка (update %s): %s", update.update_id, reason, exc_info=event.exception)
 
     target = update.message or (update.callback_query.message if update.callback_query else None)
-    if target is not None:
-        try:
-            await target.answer(f"⚠️ Не получилось получить данные: {reason}")
-        except Exception:  # noqa: BLE001
-            pass
+    if target is None:
+        return
+
+    text = f"⚠️ Не получилось получить данные: {reason}"
+    pic = photo("offline") if is_network_error(event.exception) else None
+    try:
+        if pic is not None:
+            await target.answer_photo(pic, caption=text)
+        else:
+            await target.answer(text)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def create_bot() -> tuple[Bot, Dispatcher]:

@@ -5,6 +5,14 @@ import socket
 import httpx
 from aiogram.exceptions import TelegramNetworkError
 
+_NETWORK_ERRORS: tuple[type[BaseException], ...] = (
+    httpx.TransportError,
+    socket.gaierror,
+    ConnectionError,
+    TelegramNetworkError,
+    TimeoutError,
+)
+
 _HINTS: list[tuple[type[BaseException], str]] = [
     (httpx.ConnectTimeout, "сервер не отвечает (тайм-аут) — похоже, нет доступа к Telegram (нужен VPN?)"),
     (httpx.ReadTimeout, "сервер не отвечает (тайм-аут)"),
@@ -14,6 +22,14 @@ _HINTS: list[tuple[type[BaseException], str]] = [
     (httpx.ConnectError, "не удалось подключиться к серверу"),
     (TelegramNetworkError, "нет связи с Telegram (сеть или блокировка)"),
 ]
+
+
+def is_network_error(err: BaseException) -> bool:
+    """True, если ошибка (или её причина) — сетевой сбой, а не баг в коде."""
+    for exc in (err, err.__cause__, err.__context__):
+        if exc is not None and isinstance(exc, _NETWORK_ERRORS):
+            return True
+    return False
 
 
 def describe_error(err: BaseException) -> str:

@@ -23,7 +23,7 @@ def texts(markup) -> list[str]:
 # --- без группы: одна кнопка «Запустить» ------------------------------
 no_group = build_main_menu(None)
 check("без группы — одна кнопка", texts(no_group) == [Button.LAUNCH])
-check("клавиатура закреплена", no_group.is_persistent is True)
+check("клавиатура НЕ закреплена (Telegram даёт свернуть)", not no_group.is_persistent)
 
 # --- с группой: полное меню, кнопка группы с названием ----------------
 menu = build_main_menu("23-ИСП-1")
@@ -48,7 +48,7 @@ check(
 )
 check("в подменю есть «Назад»", Button.BACK in mt)
 check("в подменю нет кнопок главного меню", not any(b in mt for b in (Button.TODAY, Button.TOMORROW, Button.MORE)))
-check("подменю закреплено", more.is_persistent is True)
+check("подменю НЕ закреплено", not more.is_persistent)
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)
