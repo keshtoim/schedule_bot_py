@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from ..config import config
+from ..utils.atomic import write_text_atomic
 
 # chat_id (str) -> имя группы
 _UserMap = dict[str, str]
@@ -23,8 +24,7 @@ def _load() -> _UserMap:
 
 
 def _persist(data: _UserMap) -> None:
-    config.data_path.mkdir(parents=True, exist_ok=True)
-    _file_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), "utf-8")
+    write_text_atomic(_file_path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
 async def set_user_group(chat_id: int, group: str) -> None:

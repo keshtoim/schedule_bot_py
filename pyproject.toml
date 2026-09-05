@@ -10,6 +10,7 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "lxml>=5",
     "httpx>=0.27",
+    "tzdata",  # часовой пояс Europe/Moscow — на случай сервера без системной tzdb
 ]
 
 [project.optional-dependencies]

@@ -11,6 +11,7 @@ from ..utils.weekday import (
     format_ddmmyyyy,
     is_numerator_week,
     monday_of_week,
+    today,
     weekday_name,
 )
 from .schedule_service import get_schedule, get_zameny
@@ -93,7 +94,7 @@ async def format_day(group: str, day_date: date) -> str:
 
 async def format_week(group: str, around: date | None = None) -> str:
     """Понедельник–суббота недели, содержащей `around` (по умолчанию сегодня)."""
-    monday = monday_of_week(around or date.today())
+    monday = monday_of_week(around or today())
     days = await asyncio.gather(*(format_day(group, add_days(monday, i)) for i in range(6)))
     return "\n\n".join(days)
 

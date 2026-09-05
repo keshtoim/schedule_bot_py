@@ -11,6 +11,7 @@ from ..utils.weekday import (
     format_ddmmyyyy,
     is_numerator_week,
     monday_of_week,
+    today,
     weekday_name,
 )
 from .schedule_service import get_schedule, get_zameny
@@ -205,7 +206,7 @@ async def build_day_html(group: str, day_date: date) -> str:
 
 async def build_week_html(group: str, around: date | None = None) -> str:
     """Понедельник–суббота недели, содержащей `around` (по умолчанию сегодня)."""
-    monday = monday_of_week(around or date.today())
+    monday = monday_of_week(around or today())
     numerator_week = is_numerator_week(monday)
     parity_label = "числитель" if numerator_week else "знаменатель"
     schedule, zameny = await asyncio.gather(get_schedule(), get_zameny())

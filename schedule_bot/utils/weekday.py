@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from .clock import today as _today_msk
+
 # date.weekday(): 0 = понедельник ... 6 = воскресенье
 _WEEKDAYS = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
@@ -11,11 +13,11 @@ def weekday_name(d: date) -> str:
 
 
 def today() -> date:
-    return date.today()
+    return _today_msk()
 
 
 def tomorrow() -> date:
-    return date.today() + timedelta(days=1)
+    return _today_msk() + timedelta(days=1)
 
 
 def add_days(d: date, n: int) -> date:

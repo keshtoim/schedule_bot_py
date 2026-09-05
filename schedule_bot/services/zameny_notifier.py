@@ -13,6 +13,8 @@ from aiogram.types import BufferedInputFile
 from ..config import config
 from ..parser.zameny_parser import ZamenyBlock
 from ..store.user_store import get_chats_for_group, get_subscribed_groups
+from ..utils.atomic import write_text_atomic
+from ..utils.clock import now as _now
 from .group_reconcile import ZamenyAnomaly
 from .rich_message import send_rich_message_html
 from .schedule_service import get_zameny, get_zameny_anomalies, get_zameny_file_path
@@ -110,9 +112,8 @@ def _load_digest_store() -> DigestStore | None:
 
 
 def _save_digest_store(store: DigestStore) -> None:
-    config.data_path.mkdir(parents=True, exist_ok=True)
     raw = {group: dataclasses.asdict(state) for group, state in store.items()}
-    _digest_store_path().write_text(json.dumps(raw, ensure_ascii=False, indent=2), "utf-8")
+    write_text_atomic(_digest_store_path(), json.dumps(raw, ensure_ascii=False, indent=2))
 
 
 async def _send_digest(bot: Bot, chat_id: int, digest: ZamenyDigest) -> None:
@@ -188,8 +189,7 @@ def _load_notified_anomalies() -> set[str] | None:
 
 
 def _save_notified_anomalies(keys: set[str]) -> None:
-    config.data_path.mkdir(parents=True, exist_ok=True)
-    _anomalies_state_path().write_text(json.dumps(sorted(keys), ensure_ascii=False), "utf-8")
+    write_text_atomic(_anomalies_state_path(), json.dumps(sorted(keys), ensure_ascii=False))
 
 
 @dataclass
@@ -286,12 +286,12 @@ def next_run(now: datetime, start: time, interval_hours: int) -> datetime:
     `interval_hours` часов, пока не перевалит за полночь. Все сегодняшние
     слоты прошли — завтра в `start`. Ночью колледж замены не публикует."""
     step = timedelta(hours=max(1, interval_hours))
-    slot = datetime.combine(now.date(), start)
+    slot = datetime.combine(now.date(), start, tzinfo=now.tzinfo)
     while slot.date() == now.date():
         if slot > now + timedelta(seconds=1):
             return slot
         slot += step
-    return datetime.combine(now.date() + timedelta(days=1), start)
+    return datetime.combine(now.date() + timedelta(days=1), start, tzinfo=now.tzinfo)
 
 
 _task: asyncio.Task | None = None
@@ -315,8 +315,8 @@ def start_zameny_watcher(bot: Bot) -> None:
             except Exception:
                 log.exception("Замены: сбой проверки изменений")
 
-            nxt = next_run(datetime.now(), start, interval_h)
-            wait = (nxt - datetime.now()).total_seconds()
+            nxt = next_run(_now(), start, interval_h)
+            wait = (nxt - _now()).total_seconds()
             log.info("Следующая проверка замен: %s (через %.1f ч)", nxt.strftime("%d.%m %H:%M"), wait / 3600)
             await asyncio.sleep(max(1.0, wait))
 

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
+
+from .utils.clock import MSK
 
 # Время, уровень, короткое имя модуля, сообщение. Дата без года — лог читают
 # по горячим следам, а не через месяц.
@@ -29,8 +32,12 @@ def setup_logging(level: str | None = None) -> None:
     прочие мелочи)."""
     lvl = (level or os.getenv("LOG_LEVEL") or "INFO").upper()
 
+    formatter = logging.Formatter(_FORMAT, datefmt=_DATEFMT)
+    # Метки времени в логах — по Москве, независимо от TZ сервера.
+    formatter.converter = lambda t: datetime.fromtimestamp(t, MSK).timetuple()
+
     handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(_FORMAT, datefmt=_DATEFMT))
+    handler.setFormatter(formatter)
     handler.addFilter(_ShortName())
 
     root = logging.getLogger()
