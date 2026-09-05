@@ -29,6 +29,10 @@ def _parse_time(raw: str | None, default: str) -> time:
 @dataclass(frozen=True)
 class Config:
     bot_token: str
+    # Прокси для api.telegram.org, если сервер не видит Telegram напрямую.
+    # http://host:port или socks5://user:pass@host:port (socks — нужен
+    # пакет aiohttp-socks). Пусто = без прокси.
+    telegram_proxy: str | None
     # Обычный режим: COLLEGE_PAGE_URL парсится при каждом обновлении, чтобы
     # найти актуальные ссылки на файлы расписания/замен (они каждый раз
     # перезаливаются под новым именем).
@@ -66,6 +70,7 @@ def _load() -> Config:
 
     return Config(
         bot_token=bot_token,
+        telegram_proxy=os.getenv("TELEGRAM_PROXY") or None,
         college_page_url=college_page_url,
         schedule_source=schedule_source,
         zameny_source=zameny_source,

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from .bot import create_bot
+from .bot import create_bot, preflight
 from .logging_setup import setup_logging
 from .utils.describe_error import describe_error
 
@@ -22,6 +22,7 @@ async def _run() -> None:
         attempt += 1
         try:
             log.info("Запускаю поллинг (попытка %d)…", attempt)
+            await preflight(bot)
             await dp.start_polling(bot)
             return
         except Exception as err:  # noqa: BLE001

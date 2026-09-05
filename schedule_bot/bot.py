@@ -1,9 +1,12 @@
 import asyncio
 import logging
+import time
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramConflictError
 from aiogram.types import BotCommand, ErrorEvent
 
 from .assets import photo
@@ -13,10 +16,15 @@ from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .store.user_store import get_all_chats
+from .utils.atomic import write_text_atomic
 from .utils.describe_error import describe_error, is_network_error
 from .utils.html import escape_html
 
 log = logging.getLogger(__name__)
+
+# Не чаще одного раза в это число часов бот сообщает всем «я перезапустился».
+# Иначе краш-луп или несколько деплоёв подряд засыпят подписчиков.
+_RESTART_NOTIFY_COOLDOWN_H = 12
 
 # Наполняет меню команд "/" в Telegram. Это же заставляет работать нативную
 # кнопку "Start" (показывается до первого сообщения или после перезапуска
@@ -48,6 +56,15 @@ async def _notify_restart(bot: Bot) -> None:
         return
     _restart_notified = True
 
+    stamp = config.data_path / "last-restart-notify"
+    try:
+        last = float(stamp.read_text())
+    except (OSError, ValueError):
+        last = 0.0
+    if time.time() - last < _RESTART_NOTIFY_COOLDOWN_H * 3600:
+        log.info("Уведомление о перезапуске пропущено — было менее %d ч назад", _RESTART_NOTIFY_COOLDOWN_H)
+        return
+
     chats = await get_all_chats()
     if not chats:
         log.info("Уведомление о перезапуске: подписчиков нет")
@@ -77,6 +94,10 @@ async def _notify_restart(bot: Bot) -> None:
             log.warning("Не удалось уведомить чат %s о перезапуске", chat_id, exc_info=True)
         await asyncio.sleep(0.05)  # бережём лимиты Telegram
     log.info("Уведомление о перезапуске разослано: %d ок, %d с ошибкой", sent, failed)
+    try:
+        write_text_atomic(stamp, str(time.time()))
+    except OSError:
+        log.warning("Не записал отметку о рассылке перезапуска — %s", stamp)
 
 
 async def _on_startup(bot: Bot) -> None:
@@ -120,8 +141,33 @@ async def _on_error(event: ErrorEvent) -> None:
         pass
 
 
+async def preflight(bot: Bot) -> None:
+    """Ловим самую частую ошибку деплоя — второй запущенный инстанс — и
+    объясняем по-русски до того, как polling начнёт крутить это в цикле."""
+    try:
+        await bot.delete_webhook(drop_pending_updates=False)
+        await bot.get_updates(limit=1, timeout=1)
+    except TelegramConflictError:
+        log.error(
+            "─── Этот бот уже где-то запущен с тем же токеном ───\n"
+            "  Telegram отдаёт getUpdates только одному процессу. Останови\n"
+            "  другой инстанс (локальный запуск при живом сервере? второй\n"
+            "  контейнер?) или заведи отдельного тестового бота у @BotFather.\n"
+            "  Пока не остановишь — polling будет молотить вхолостую."
+        )
+    except Exception as err:  # noqa: BLE001
+        log.warning("Предстартовая проверка не прошла: %s", describe_error(err))
+
+
 def create_bot() -> tuple[Bot, Dispatcher]:
-    bot = Bot(config.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    session = AiohttpSession(proxy=config.telegram_proxy) if config.telegram_proxy else None
+    if session is not None:
+        log.info("Telegram через прокси: %s", config.telegram_proxy)
+    bot = Bot(
+        config.bot_token,
+        session=session,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
     dp = Dispatcher()
 
     logging_mw = LoggingMiddleware()
