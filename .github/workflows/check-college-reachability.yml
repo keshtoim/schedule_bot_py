@@ -1,0 +1,148 @@
+name: Проверка доступа к сайту колледжа
+
+# Одноразовая диагностика: видно ли сайт колледжа с зарубежного дата-центра
+# (раннеры GitHub — это Azure, США/Европа) настолько, чтобы бот мог там жить
+# без прокси для колледжа.
+#
+# Запуск: вкладка Actions -> "Проверка доступа к сайту колледжа" -> Run workflow.
+#
+# Что проверяет:
+#  1. страну раннера;
+#  2. сырой ответ страницы (код, размер, редиректы, заголовки);
+#  3. не подсунули ли вместо страницы анти-DDoS заглушку (DDoS-Guard/Qrator/CF);
+#  4. находятся ли на странице ссылки на .xlsx и качаются ли сами файлы;
+#  5. сквозной прогон настоящим кодом бота (scripts.test_live) с повторами.
+
+on:
+  workflow_dispatch:
+    inputs:
+      page_url:
+        description: Страница колледжа со ссылками на файлы
+        default: https://college.tu-bryansk.ru/?page_id=4043
+        required: true
+      attempts:
+        description: Сколько раз повторить сквозную проверку (сеть в РФ нестабильна)
+        default: "3"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  reachability:
+    runs-on: ubuntu-latest
+    env:
+      PAGE_URL: ${{ inputs.page_url }}
+      ATTEMPTS: ${{ inputs.attempts }}
+      BROWSER_UA: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+    steps:
+      - name: Страна и IP раннера
+        run: |
+          echo "Где физически выполняется проверка:"
+          curl -s --max-time 15 https://ipinfo.io/json || echo "(не удалось определить)"
+          echo
+
+      - name: Сырой запрос страницы (браузерный User-Agent)
+        run: |
+          echo "GET $PAGE_URL"
+          curl -sS -L --connect-timeout 20 --max-time 60 \
+               -A "$BROWSER_UA" \
+               -D headers.txt -o page.html \
+               -w 'время=%{time_total}s код=%{http_code} редиректов=%{num_redirects} размер=%{size_download}Б\n' \
+               "$PAGE_URL" || echo "curl завершился с ошибкой (код $?)"
+          echo
+          echo "--- заголовки ответа ---"
+          cat headers.txt 2>/dev/null || echo "(заголовков нет — соединение не состоялось)"
+
+      - name: Тот же запрос, но с User-Agent как у бота (httpx)
+        run: |
+          echo "Так страницу видит именно бот (httpx шлёт такой UA по умолчанию):"
+          curl -sS -L --connect-timeout 20 --max-time 60 \
+               -A "python-httpx/0.27.0" -o page-httpx.html \
+               -w 'код=%{http_code} размер=%{size_download}Б\n' \
+               "$PAGE_URL" || echo "ошибка (код $?)"
+
+      - name: Это настоящая страница или защитная заглушка?
+        run: |
+          if [ ! -s page.html ]; then
+            echo "Тело ответа пустое или его нет — сайт недоступен с этого раннера."
+            exit 0
+          fi
+          echo "Размер тела: $(wc -c < page.html) Б"
+          echo "<title>: $(grep -oiE '<title>[^<]*</title>' page.html | head -1 || echo '(нет)')"
+          echo
+          if grep -iqE 'ddos-guard|ddosguard|__ddg|qrator\.net|checking your browser|cf-browser-verification|Attention Required|Just a moment' page.html; then
+            echo "РЕЗУЛЬТАТ: пришла анти-DDoS заглушка, а не контент."
+            echo "  -> обычному curl/httpx сайт отдаёт челлендж. Нужен релей из РФ либо"
+            echo "     клиент с полноценным браузерным поведением."
+          else
+            echo "Явных признаков анти-DDoS заглушки нет."
+          fi
+          echo
+          echo "Ссылки на файлы (.xls/.xlsx), найденные на странице:"
+          grep -oiE 'href="[^"]+\.xlsx?"' page.html | sed 's/^href="//; s/"$//' | sort -u | tee links.txt || true
+          echo "Всего: $(grep -c . links.txt 2>/dev/null || echo 0)"
+
+      - name: Качаются ли сами файлы .xlsx
+        run: |
+          if [ ! -s links.txt ]; then
+            echo "Ссылок на файлы нет — проверять нечего (см. шаг выше)."
+            exit 0
+          fi
+          while read -r url; do
+            [ -z "$url" ] && continue
+            echo "== $url"
+            curl -sS -L -o /dev/null --connect-timeout 20 --max-time 90 \
+                 -A "$BROWSER_UA" \
+                 -w '   код=%{http_code} тип=%{content_type} размер=%{size_download}Б время=%{time_total}s\n' \
+                 "$url" || echo "   ошибка (код $?)"
+          done < links.txt
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установка проекта
+        run: pip install -e .
+
+      - name: Сквозная проверка настоящим кодом бота
+        env:
+          COLLEGE_PAGE_URL: ${{ inputs.page_url }}
+          PYTHONUNBUFFERED: "1"
+        run: |
+          ok=0
+          for i in $(seq 1 "$ATTEMPTS"); do
+            echo "=================== Попытка $i из $ATTEMPTS ==================="
+            if python -m scripts.test_live; then
+              ok=1
+              echo ">>> Попытка $i: УСПЕХ"
+              break
+            fi
+            echo ">>> Попытка $i: неудача"
+            if [ "$i" -lt "$ATTEMPTS" ]; then sleep 10; fi
+          done
+          echo
+          if [ "$ok" = "1" ]; then
+            echo "ИТОГ: сайт колледжа доступен с этого дата-центра, ссылки найдены,"
+            echo "      файлы скачаны и разобраны. Бота можно хостить за границей"
+            echo "      без прокси для колледжа."
+          else
+            echo "ИТОГ: напрямую данные колледжа отсюда получить не удалось."
+            echo "      Нужен релей/прокси из РФ для запросов к колледжу"
+            echo "      (Cloudflare Worker или маленький хост в РФ)."
+            exit 1
+          fi
+
+      - name: Сохранить ответы для ручного разбора
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: college-response
+          path: |
+            headers.txt
+            page.html
+            page-httpx.html
+            links.txt
+          if-no-files-found: ignore
