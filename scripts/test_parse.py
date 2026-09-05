@@ -12,6 +12,10 @@ from schedule_bot.parser.zameny_parser import parse_zameny
 
 SAMPLES = Path(__file__).resolve().parent.parent / "scratch_samples"
 
+if not list(SAMPLES.glob("*.xlsx")):
+    print("SKIP: нет scratch_samples/*.xlsx (реальные файлы не в git)")
+    raise SystemExit(0)
+
 
 def main() -> None:
     schedule = parse_schedule(load_active_sheet(SAMPLES / "raspisanie.xlsx"))

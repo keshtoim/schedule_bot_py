@@ -13,6 +13,10 @@ from schedule_bot.services.group_reconcile import find_zameny_anomalies
 
 SAMPLES = Path(__file__).resolve().parent.parent / "scratch_samples"
 
+if not list(SAMPLES.glob("*.xlsx")):
+    print("SKIP: нет scratch_samples/*.xlsx (реальные файлы не в git)")
+    raise SystemExit(0)
+
 failed = 0
 
 

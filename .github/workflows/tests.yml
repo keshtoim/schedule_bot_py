@@ -1,0 +1,39 @@
+name: Тесты
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка
+        run: pip install -e .
+
+      - name: Прогон тест-скриптов
+        env:
+          # config.py требует токен + источник данных; тесты сам файл не открывают
+          BOT_TOKEN: test
+          SCHEDULE_SOURCE: none
+          ZAMENY_SOURCE: none
+          PYTHONUNBUFFERED: "1"
+        run: |
+          fail=0
+          for t in scripts/test_*.py; do
+            name="$(basename "$t" .py)"
+            # test_live ходит на реальный сайт колледжа — только вручную с .env
+            [ "$name" = "test_live" ] && continue
+            echo "──────── $name ────────"
+            python -m "scripts.$name" || fail=1
+          done
+          exit $fail

@@ -8,6 +8,10 @@ from datetime import date
 from pathlib import Path
 
 SAMPLES = Path(__file__).resolve().parent.parent / "scratch_samples"
+
+if not list(SAMPLES.glob("*.xlsx")):
+    print("SKIP: нет scratch_samples/*.xlsx (реальные файлы не в git)")
+    raise SystemExit(0)
 os.environ.setdefault("BOT_TOKEN", "test")
 os.environ["SCHEDULE_SOURCE"] = str(SAMPLES / "raspisanie.xlsx")
 os.environ["ZAMENY_SOURCE"] = str(SAMPLES / "zameny.xlsx")
