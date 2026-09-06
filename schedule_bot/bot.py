@@ -7,11 +7,12 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, ErrorEvent
 
 from .assets import photo
 from .config import config
-from .handlers import full_schedule, group, menu, start, today, week, zameny
+from .handlers import full_schedule, group, menu, settings, start, today, week, zameny
 from .housekeeping import start_housekeeping, stop_housekeeping
 from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware
@@ -78,7 +79,7 @@ async def _notify_restart(bot: Bot) -> None:
     for chat_id, group in chats:
         text = (
             f"♻️ Бот перезапущён. Твоя группа — <b>{escape_html(group)}</b>.\n"
-            "Если она неверная — нажми кнопку с группой внизу и выбери заново."
+            "Если она неверная — открой ⚙️ Настройки → 👥 Группа."
         )
         kb = build_main_menu(group)
         media = pic_file_id or pic
@@ -183,7 +184,7 @@ def create_bot() -> tuple[Bot, Dispatcher]:
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher()
+    dp = Dispatcher(storage=MemoryStorage())  # FSM: багрепорт «опиши проблему»
 
     logging_mw = LoggingMiddleware()
     dp.message.outer_middleware(logging_mw)
@@ -196,6 +197,7 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     dp.include_router(full_schedule.router)
     dp.include_router(zameny.router)
     dp.include_router(menu.router)
+    dp.include_router(settings.router)
     dp.startup.register(_on_startup)
     dp.shutdown.register(_on_shutdown)
     dp.errors.register(_on_error)

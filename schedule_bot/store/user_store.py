@@ -37,6 +37,13 @@ async def get_user_group(chat_id: int) -> str | None:
     return _load().get(str(chat_id))
 
 
+async def forget_user(chat_id: int) -> None:
+    """Убрать пользователя из хранилища — «сброс профиля»."""
+    data = _load()
+    if data.pop(str(chat_id), None) is not None:
+        _persist(data)
+
+
 async def get_chats_for_group(group: str) -> list[int]:
     """chat_id всех, кто сейчас подписан на `group` (выбрал её через /group)."""
     return [int(chat_id) for chat_id, g in _load().items() if g == group]

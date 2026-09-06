@@ -25,6 +25,7 @@ docker compose logs -f    # смотрим, что поднялось
 | `COLLEGE_PAGE_URL` | **да**\* | страница колледжа со ссылками на .xlsx |
 | `SCHEDULE_SOURCE`, `ZAMENY_SOURCE` | \* | вместо `COLLEGE_PAGE_URL` — прямые ссылки/пути к файлам (режим отладки) |
 | `TELEGRAM_PROXY` | нет | прокси к Telegram, если сервер его не видит. Для зарубежного сервера не нужен |
+| `OWNER_CHAT_ID` | нет | твой chat_id — туда бот шлёт багрепорты от пользователей. Узнать: напиши боту `/id`. Без него багрепорты — в лог и `data/bug-reports.jsonl` |
 | `CACHE_TTL_MINUTES` | нет | кеш данных, по умолчанию 15 |
 | `NOTIFY_START_TIME`, `NOTIFY_INTERVAL_HOURS` | нет | расписание проверок замен, по умолчанию 12:25 и раз в 3 ч |
 | `LOG_LEVEL` | нет | `DEBUG`/`INFO`/`WARNING`/`ERROR`, по умолчанию `INFO` |
@@ -53,6 +54,7 @@ docker compose logs -f    # смотрим, что поднялось
 | `zameny-group-digests.json` | что уже разослано по группам (регенерируется, но сброс → лишняя рассылка) |
 | `zameny-anomalies-notified.json` | какие опечатки в группах уже показывали |
 | `last-restart-notify` | когда последний раз слали «бот обновлён» (не чаще раза в 12 ч) |
+| `bug-reports.jsonl` | все багрепорты от пользователей, по строке на штуку |
 
 Волюм переживает `docker compose down` и пересборку образа. Пропадает только
 при `docker compose down -v` или удалении волюма руками.

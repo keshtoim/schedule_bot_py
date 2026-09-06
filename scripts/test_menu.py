@@ -1,10 +1,16 @@
-"""Клавиатура меню под пользователя: python -m scripts.test_menu"""
+"""Клавиатуры меню: python -m scripts.test_menu"""
 
 from __future__ import annotations
 
 import sys
 
-from schedule_bot.keyboards import Button, build_main_menu, build_more_menu, group_button_text
+from schedule_bot.keyboards import (
+    Button,
+    build_bug_cancel_menu,
+    build_main_menu,
+    build_more_menu,
+    build_settings_menu,
+)
 
 failed = 0
 
@@ -25,30 +31,26 @@ no_group = build_main_menu(None)
 check("без группы — одна кнопка", texts(no_group) == [Button.LAUNCH])
 check("клавиатура НЕ закреплена (Telegram даёт свернуть)", not no_group.is_persistent)
 
-# --- с группой: полное меню, кнопка группы с названием ----------------
-menu = build_main_menu("23-ИСП-1")
-t = texts(menu)
-check("кнопка группы показывает название", "👥 23-ИСП-1" in t)
-check("есть «Ещё»", Button.MORE in t)
-check("есть «Сегодня»/«Завтра»/«Неделя»/«Замены»", all(b in t for b in (Button.TODAY, Button.TOMORROW, Button.WEEK, Button.ZAMENY)))
-check("«Общее расписание» ушло с клавиатуры", Button.FULL_SCHEDULE not in t)
-check("«След. неделя» ушла с клавиатуры", Button.NEXT_WEEK not in t)
-check("6 кнопок", len(t) == 6)
+# --- главное меню с группой -----------------------------------------
+t = texts(build_main_menu("23-ИСП-1"))
+check("главное меню: 6 кнопок", len(t) == 6)
+check("есть Сегодня/Завтра/Неделя/Замены", all(b in t for b in (Button.TODAY, Button.TOMORROW, Button.WEEK, Button.ZAMENY)))
+check("есть «Настройки» и «Ещё»", Button.SETTINGS in t and Button.MORE in t)
+check("группы на кнопке больше нет (ушла в Настройки)", not any(x.startswith("👥 2") for x in t))
+check("«Общее расписание» / «След. неделя» не на главной", Button.FULL_SCHEDULE not in t and Button.NEXT_WEEK not in t)
 
-# --- матчинг кнопки группы по префиксу -------------------------------
-check("текст кнопки группы совпадает с префиксом", group_button_text("24-ТМ").startswith(Button.GROUP_PREFIX))
-check("«👥 24-ТМ».startswith(префикс)", "👥 24-ТМ".startswith(Button.GROUP_PREFIX))
+# --- подменю «Ещё» -------------------------------------------------
+mt = texts(build_more_menu())
+check("Ещё: расписание/след.неделя/файлы + Назад", all(b in mt for b in (Button.FULL_SCHEDULE, Button.NEXT_WEEK, Button.SCHEDULE_FILE, Button.ZAMENY_FILE, Button.BACK)))
+check("Ещё: без кнопок главного меню", not any(b in mt for b in (Button.TODAY, Button.MORE, Button.SETTINGS)))
 
-# --- подменю «Ещё»: то, что ушло с главной клавиатуры, — здесь ---------
-more = build_more_menu()
-mt = texts(more)
-check(
-    "подменю содержит общее расписание/след. неделю/файлы",
-    all(b in mt for b in (Button.FULL_SCHEDULE, Button.NEXT_WEEK, Button.SCHEDULE_FILE, Button.ZAMENY_FILE)),
-)
-check("в подменю есть «Назад»", Button.BACK in mt)
-check("в подменю нет кнопок главного меню", not any(b in mt for b in (Button.TODAY, Button.TOMORROW, Button.MORE)))
-check("подменю НЕ закреплено", not more.is_persistent)
+# --- подменю «Настройки» ------------------------------------------
+st = texts(build_settings_menu())
+check("Настройки: Группа / Сообщить об ошибке / Сбросить профиль / Назад", st == [Button.GROUP, Button.BUG, Button.RESET, Button.BACK])
+check("«👥 Группа» матчится префиксом (как и старая «👥 23-ИСП-1»)", Button.GROUP.startswith(Button.GROUP_PREFIX))
+
+# --- клавиатура ожидания багрепорта -------------------------------
+check("багрепорт: на клавиатуре только «Отмена»", texts(build_bug_cancel_menu()) == [Button.BUG_CANCEL])
 
 print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
 sys.exit(0 if failed == 0 else 1)

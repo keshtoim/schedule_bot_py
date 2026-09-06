@@ -2,6 +2,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, Message
 
 from ..keyboards import Button, build_main_menu, build_more_menu
@@ -30,7 +31,8 @@ async def handle_back(message: Message) -> None:
 
 
 @router.message(Command("menu"))
-async def handle_menu(message: Message) -> None:
+async def handle_menu(message: Message, state: FSMContext) -> None:
+    await state.clear()  # /menu прерывает незавершённый диалог
     group = await get_user_group(message.chat.id)
     await message.answer("Кнопки на месте 👇", reply_markup=build_main_menu(group))
 

@@ -33,6 +33,8 @@ class Config:
     # http://host:port или socks5://user:pass@host:port (socks — нужен
     # пакет aiohttp-socks). Пусто = без прокси.
     telegram_proxy: str | None
+    # chat_id владельца — туда бот шлёт багрепорты. Свой узнать: /id боту.
+    owner_chat_id: int | None
     # Обычный режим: COLLEGE_PAGE_URL парсится при каждом обновлении, чтобы
     # найти актуальные ссылки на файлы расписания/замен (они каждый раз
     # перезаливаются под новым именем).
@@ -68,9 +70,16 @@ def _load() -> Config:
 
     cache_ttl_minutes = int(os.getenv("CACHE_TTL_MINUTES") or 15)
 
+    owner_raw = os.getenv("OWNER_CHAT_ID")
+    try:
+        owner_chat_id = int(owner_raw) if owner_raw else None
+    except ValueError:
+        raise RuntimeError(f"OWNER_CHAT_ID должно быть числом, а не {owner_raw!r}") from None
+
     return Config(
         bot_token=bot_token,
         telegram_proxy=os.getenv("TELEGRAM_PROXY") or None,
+        owner_chat_id=owner_chat_id,
         college_page_url=college_page_url,
         schedule_source=schedule_source,
         zameny_source=zameny_source,
