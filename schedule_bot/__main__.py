@@ -22,7 +22,7 @@ async def _run() -> None:
         attempt += 1
         try:
             log.info("Запускаю поллинг (попытка %d)…", attempt)
-            await preflight(bot)
+            await preflight(bot, drop_pending=attempt == 1)
             await dp.start_polling(bot)
             return
         except Exception as err:  # noqa: BLE001

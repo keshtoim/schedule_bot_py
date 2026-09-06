@@ -117,7 +117,7 @@ docker compose logs --since 1h bot  # за час
 ## Без Docker (systemd)
 
 ```bash
-python3.12 -m venv .venv && . .venv/bin/activate
+python3.11 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt && pip install --no-deps .
 cp .env.example .env && nano .env
 ```

@@ -144,11 +144,15 @@ async def _on_error(event: ErrorEvent) -> None:
         pass
 
 
-async def preflight(bot: Bot) -> None:
-    """Ловим самую частую ошибку деплоя — второй запущенный инстанс — и
-    объясняем по-русски до того, как polling начнёт крутить это в цикле."""
+async def preflight(bot: Bot, drop_pending: bool = False) -> None:
+    """Перед поллингом: гасим вебхук (на всякий) и ловим самую частую ошибку
+    деплоя — второй запущенный инстанс — объясняя по-русски. `drop_pending`
+    на первом старте выкидывает накопившийся за простой бэклог, чтобы бот не
+    отвечал на сутки устаревших «/today»."""
     try:
-        await bot.delete_webhook(drop_pending_updates=False)
+        await bot.delete_webhook(drop_pending_updates=drop_pending)
+        if drop_pending:
+            log.info("Накопленные за простой апдейты сброшены")
         await bot.get_updates(limit=1, timeout=1)
     except TelegramConflictError:
         log.error(
@@ -162,10 +166,18 @@ async def preflight(bot: Bot) -> None:
         log.warning("Предстартовая проверка не прошла: %s", describe_error(err))
 
 
+def _mask_credentials(url: str) -> str:
+    """socks5://user:pass@host:port -> socks5://***@host:port (для логов)."""
+    if "://" in url and "@" in url:
+        scheme, rest = url.split("://", 1)
+        return f"{scheme}://***@{rest.rsplit('@', 1)[1]}"
+    return url
+
+
 def create_bot() -> tuple[Bot, Dispatcher]:
     session = AiohttpSession(proxy=config.telegram_proxy) if config.telegram_proxy else None
     if session is not None:
-        log.info("Telegram через прокси: %s", config.telegram_proxy)
+        log.info("Telegram через прокси: %s", _mask_credentials(config.telegram_proxy))
     bot = Bot(
         config.bot_token,
         session=session,
