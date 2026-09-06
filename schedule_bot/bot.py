@@ -12,6 +12,7 @@ from aiogram.types import BotCommand, ErrorEvent
 from .assets import photo
 from .config import config
 from .handlers import full_schedule, group, menu, start, today, week, zameny
+from .housekeeping import start_housekeeping, stop_housekeeping
 from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
@@ -108,6 +109,7 @@ async def _on_startup(bot: Bot) -> None:
     except Exception:
         log.exception("Не удалось обновить меню команд")
     start_zameny_watcher(bot)
+    start_housekeeping()
     global _restart_task
     _restart_task = asyncio.create_task(_notify_restart(bot))
 
@@ -115,6 +117,7 @@ async def _on_startup(bot: Bot) -> None:
 async def _on_shutdown() -> None:
     log.info("Останавливаюсь…")
     stop_zameny_watcher()
+    stop_housekeeping()
 
 
 async def _on_error(event: ErrorEvent) -> None:

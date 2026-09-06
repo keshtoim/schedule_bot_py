@@ -23,4 +23,9 @@ RUN pip install --no-deps .
 # users.json, кеш книг, состояние дайджестов — переживают пересборку образа
 VOLUME /data
 
+# housekeeping пишет /data/heartbeat раз в минуту; здесь проверяем свежесть.
+# Полноценный авто-рестарт по unhealthy — через autoheal (см. compose.yml).
+HEALTHCHECK --interval=2m --timeout=10s --start-period=90s --retries=3 \
+    CMD ["python", "-m", "schedule_bot.healthcheck"]
+
 CMD ["python", "-m", "schedule_bot"]

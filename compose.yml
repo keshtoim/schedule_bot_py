@@ -12,6 +12,18 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    labels:
+      autoheal: "true"
+
+  # Раскомментируй, чтобы контейнер сам перезапускался, если healthcheck
+  # покажет «завис» (обычный restart: unless-stopped на unhealthy не реагирует).
+  # autoheal:
+  #   image: willfarrell/autoheal
+  #   restart: unless-stopped
+  #   environment:
+  #     AUTOHEAL_CONTAINER_LABEL: autoheal
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   bot-data:

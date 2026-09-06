@@ -47,6 +47,8 @@ docker compose logs -f    # смотрим, что поднялось
 | Файл | Что |
 |---|---|
 | `users.json` | кто в какой группе — **единственный незаменимый файл** |
+| `users.json.bak` / `.bak.prev` | автобэкап, обновляется раз в сутки (только валидный непустой JSON) |
+| `heartbeat` | отметка «бот жив», раз в минуту — на неё смотрит healthcheck |
 | `cache/` | скачанные книги расписания и замен (регенерируется) |
 | `zameny-group-digests.json` | что уже разослано по группам (регенерируется, но сброс → лишняя рассылка) |
 | `zameny-anomalies-notified.json` | какие опечатки в группах уже показывали |
@@ -55,12 +57,24 @@ docker compose logs -f    # смотрим, что поднялось
 Волюм переживает `docker compose down` и пересборку образа. Пропадает только
 при `docker compose down -v` или удалении волюма руками.
 
-**Бэкап** (хотя бы `users.json`):
+**Бэкап.** `users.json.bak` бот делает сам раз в сутки. Чтобы копия жила ещё и
+вне сервера — забирай её по cron:
 ```bash
-docker compose cp bot:/data ./data-backup       # весь каталог
-# или разово в cron:
-docker run --rm -v schedule_bot_py_bot-data:/d -v "$PWD":/out alpine \
-  cp /d/users.json /out/users.json.$(date +%F)
+docker compose cp bot:/data/users.json.bak ./backup/users.$(date +%F).json
+```
+
+## Healthcheck
+
+Бот раз в минуту пишет `/data/heartbeat`; healthcheck в контейнере проверяет,
+что отметке меньше 5 минут. `docker ps` покажет `healthy` / `unhealthy`.
+
+Обычный `restart: unless-stopped` на `unhealthy` **не реагирует** (перезапускает
+только упавший контейнер). Чтобы перезапускало и «зависший» — раскомментируй
+сервис `autoheal` в `compose.yml`.
+
+Проверить руками:
+```bash
+docker compose exec bot python -m schedule_bot.healthcheck
 ```
 
 ## Обновление
