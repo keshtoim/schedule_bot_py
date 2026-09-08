@@ -5,10 +5,12 @@ from __future__ import annotations
 import sys
 
 from schedule_bot.keyboards import (
+    REMINDER_CHOICES,
     Button,
     build_bug_cancel_menu,
     build_main_menu,
     build_more_menu,
+    build_reminder_picker,
     build_settings_menu,
 )
 
@@ -33,10 +35,10 @@ check("клавиатура НЕ закреплена (Telegram даёт све�
 
 # --- главное меню с группой -----------------------------------------
 t = texts(build_main_menu("23-ИСП-1"))
-check("главное меню: 6 кнопок", len(t) == 6)
-check("есть Сегодня/Завтра/Неделя/Замены", all(b in t for b in (Button.TODAY, Button.TOMORROW, Button.WEEK, Button.ZAMENY)))
+check("главное меню: 5 кнопок", len(t) == 5)
+check("«Сегодня» убрана с клавиатуры", Button.TODAY not in t)
+check("есть Завтра/Неделя/Замены", all(b in t for b in (Button.TOMORROW, Button.WEEK, Button.ZAMENY)))
 check("есть «Настройки» и «Ещё»", Button.SETTINGS in t and Button.MORE in t)
-check("группы на кнопке больше нет (ушла в Настройки)", not any(x.startswith("👥 2") for x in t))
 check("«Общее расписание» / «След. неделя» не на главной", Button.FULL_SCHEDULE not in t and Button.NEXT_WEEK not in t)
 
 # --- подменю «Ещё» -------------------------------------------------
@@ -46,8 +48,15 @@ check("Ещё: без кнопок главного меню", not any(b in mt f
 
 # --- подменю «Настройки» ------------------------------------------
 st = texts(build_settings_menu())
-check("Настройки: Группа / Сообщить об ошибке / Сбросить профиль / Назад", st == [Button.GROUP, Button.BUG, Button.RESET, Button.BACK])
+check("Настройки: Группа / Напоминание / Ошибка / Сброс / Назад", st == [Button.GROUP, Button.REMINDER, Button.BUG, Button.RESET, Button.BACK])
 check("«👥 Группа» матчится префиксом (как и старая «👥 23-ИСП-1»)", Button.GROUP.startswith(Button.GROUP_PREFIX))
+
+# --- инлайн-выбор времени напоминания ----------------------------
+picker = build_reminder_picker("rem")
+cbs = [b.callback_data for row in picker.inline_keyboard for b in row]
+check("в пикере все варианты времени + off", cbs == [f"rem:{t}" for t in REMINDER_CHOICES] + ["rem:off"])
+check("prefix remo для онбординга", build_reminder_picker("remo").inline_keyboard[0][0].callback_data == "remo:17:00")
+check("callback rem:20:00 корректно делится", "rem:20:00".split(":", 1) == ["rem", "20:00"])
 
 # --- клавиатура ожидания багрепорта -------------------------------
 check("багрепорт: на клавиатуре только «Отмена»", texts(build_bug_cancel_menu()) == [Button.BUG_CANCEL])

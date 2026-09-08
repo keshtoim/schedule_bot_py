@@ -8,14 +8,15 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand, ErrorEvent
+from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 
 from .assets import photo
 from .config import config
-from .handlers import full_schedule, group, menu, settings, start, today, week, zameny
+from .handlers import admin, full_schedule, group, menu, settings, start, today, week, zameny
 from .housekeeping import start_housekeeping, stop_housekeeping
 from .keyboards import build_main_menu
-from .middlewares import LoggingMiddleware
+from .middlewares import LoggingMiddleware, MaintenanceMiddleware
+from .services.reminder_sender import start_reminder_sender, stop_reminder_sender
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .store.user_store import get_all_chats
 from .utils.atomic import write_text_atomic
@@ -41,6 +42,13 @@ COMMANDS = [
     BotCommand(command="schedule", description="Общее расписание (числитель и знаменатель)"),
     BotCommand(command="zameny", description="Замены"),
     BotCommand(command="menu", description="Показать кнопки меню"),
+]
+
+# Команды только для владельца — показываются в меню "/" лишь у него.
+OWNER_COMMANDS = [
+    BotCommand(command="announce", description="Разослать сообщение всем"),
+    BotCommand(command="maintenance", description="Режим техработ вкл/выкл"),
+    BotCommand(command="id", description="Показать chat_id"),
 ]
 
 
@@ -79,7 +87,7 @@ async def _notify_restart(bot: Bot) -> None:
     for chat_id, group in chats:
         text = (
             f"♻️ Бот перезапущён. Твоя группа — <b>{escape_html(group)}</b>.\n"
-            "Если она неверная — открой ⚙️ Настройки → 👥 Группа."
+            "Проверить группу и время вечернего напоминания — ⚙️ Настройки."
         )
         kb = build_main_menu(group)
         media = pic_file_id or pic
@@ -106,11 +114,16 @@ async def _on_startup(bot: Bot) -> None:
     log.info("Старт: настраиваю бота")
     try:
         await bot.set_my_commands(COMMANDS)
-        log.info("Меню команд обновлено (%d шт.)", len(COMMANDS))
+        if config.owner_chat_id:
+            await bot.set_my_commands(
+                [*COMMANDS, *OWNER_COMMANDS], scope=BotCommandScopeChat(chat_id=config.owner_chat_id)
+            )
+        log.info("Меню команд обновлено")
     except Exception:
         log.exception("Не удалось обновить меню команд")
     start_zameny_watcher(bot)
     start_housekeeping()
+    start_reminder_sender(bot)
     global _restart_task
     _restart_task = asyncio.create_task(_notify_restart(bot))
 
@@ -119,6 +132,7 @@ async def _on_shutdown() -> None:
     log.info("Останавливаюсь…")
     stop_zameny_watcher()
     stop_housekeeping()
+    stop_reminder_sender()
 
 
 async def _on_error(event: ErrorEvent) -> None:
@@ -187,9 +201,12 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     dp = Dispatcher(storage=MemoryStorage())  # FSM: багрепорт «опиши проблему»
 
     logging_mw = LoggingMiddleware()
-    dp.message.outer_middleware(logging_mw)
-    dp.callback_query.outer_middleware(logging_mw)
+    maintenance_mw = MaintenanceMiddleware()
+    for observer in (dp.message, dp.callback_query):
+        observer.outer_middleware(logging_mw)
+        observer.outer_middleware(maintenance_mw)
 
+    dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(group.router)
     dp.include_router(today.router)

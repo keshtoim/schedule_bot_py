@@ -69,6 +69,17 @@ def day_lesson_lines(day, group: str, numerator_week: bool, zameny_block: Zameny
     return [line for _, line in entries]
 
 
+async def day_has_lessons(group: str, day_date: date) -> bool:
+    """Есть ли у группы пары в этот день (с учётом замен). Нужно, чтобы не
+    слать вечернее напоминание про «завтра пар нет»."""
+    schedule, zameny = await asyncio.gather(get_schedule(), get_zameny())
+    day = next((d for d in schedule.days if d.weekday == weekday_name(day_date)), None)
+    if day is None:
+        return False
+    zameny_block = next((z for z in zameny if z.date == format_ddmmyyyy(day_date)), None)
+    return bool(day_lesson_lines(day, group, is_numerator_week(day_date), zameny_block))
+
+
 async def format_day(group: str, day_date: date) -> str:
     """Запасной вариант на случай сбоя sendRichMessage (schedule_rich_view):
     обычный текст в разметке Telegram parse_mode="HTML"."""

@@ -5,8 +5,9 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from ..keyboards import Button, build_main_menu
+from ..keyboards import Button, build_main_menu, build_reminder_picker
 from ..services.schedule_service import get_schedule
+from ..store.reminders import get_reminder
 from ..store.user_store import set_user_group
 from ..utils.html import escape_html
 
@@ -63,8 +64,17 @@ async def handle_back(callback: CallbackQuery) -> None:
 @router.callback_query(F.data.startswith("grp:"))
 async def handle_pick_group(callback: CallbackQuery) -> None:
     group = callback.data.split(":", 1)[1]
-    await set_user_group(callback.message.chat.id, group)
-    log.info("Группа сохранена: chat=%s → %s", callback.message.chat.id, group)
+    chat_id = callback.message.chat.id
+    await set_user_group(chat_id, group)
+    log.info("Группа сохранена: chat=%s → %s", chat_id, group)
     await callback.message.edit_text(f"Группа сохранена: <b>{escape_html(group)}</b>")
     await callback.answer()
-    await callback.message.answer("Готово! Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))
+
+    if get_reminder(chat_id) is None:
+        # первый онбординг — спрашиваем время напоминания, «Готово» пришлёт remo-хендлер
+        await callback.message.answer(
+            "Во сколько присылать расписание на завтра?",
+            reply_markup=build_reminder_picker("remo"),
+        )
+    else:
+        await callback.message.answer("Готово! Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))

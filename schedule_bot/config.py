@@ -26,6 +26,15 @@ def _parse_time(raw: str | None, default: str) -> time:
         raise RuntimeError(f"Ожидал время в формате ЧЧ:ММ, получил {value!r}") from err
 
 
+def _parse_reminder(raw: str | None, default: str) -> str:
+    """Нормализует REMINDER_DEFAULT: "off" или "HH:MM" (с ведущими нулями)."""
+    value = (raw or default).strip().lower()
+    if value == "off":
+        return "off"
+    t = _parse_time(value, default)
+    return f"{t.hour:02d}:{t.minute:02d}"
+
+
 @dataclass(frozen=True)
 class Config:
     bot_token: str
@@ -35,6 +44,9 @@ class Config:
     telegram_proxy: str | None
     # chat_id владельца — туда бот шлёт багрепорты. Свой узнать: /id боту.
     owner_chat_id: int | None
+    # Дефолтное время напоминания «пары на завтра» (HH:MM или "off").
+    # Применяется к тем, кто не выбрал своё в онбординге/настройках.
+    reminder_default: str
     # Обычный режим: COLLEGE_PAGE_URL парсится при каждом обновлении, чтобы
     # найти актуальные ссылки на файлы расписания/замен (они каждый раз
     # перезаливаются под новым именем).
@@ -80,6 +92,7 @@ def _load() -> Config:
         bot_token=bot_token,
         telegram_proxy=os.getenv("TELEGRAM_PROXY") or None,
         owner_chat_id=owner_chat_id,
+        reminder_default=_parse_reminder(os.getenv("REMINDER_DEFAULT"), "20:00"),
         college_page_url=college_page_url,
         schedule_source=schedule_source,
         zameny_source=zameny_source,

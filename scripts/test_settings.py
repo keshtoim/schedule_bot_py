@@ -15,7 +15,7 @@ os.environ["DATA_DIR"] = str(_DATA)
 os.environ.setdefault("BOT_TOKEN", "test")
 os.environ.setdefault("SCHEDULE_SOURCE", "x")
 os.environ.setdefault("ZAMENY_SOURCE", "y")
-os.environ.pop("OWNER_CHAT_ID", None)
+os.environ["OWNER_CHAT_ID"] = ""  # пусто и явно, чтобы .env не подставил своё
 
 from schedule_bot.config import config  # noqa: E402
 from schedule_bot.feedback import _log_file, report_bug  # noqa: E402

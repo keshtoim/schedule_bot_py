@@ -8,7 +8,14 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from ..feedback import report_bug
-from ..keyboards import Button, build_bug_cancel_menu, build_main_menu, build_settings_menu
+from ..keyboards import (
+    Button,
+    build_bug_cancel_menu,
+    build_main_menu,
+    build_reminder_picker,
+    build_settings_menu,
+)
+from ..store.reminders import effective_reminder, forget_reminder, set_reminder
 from ..store.user_store import forget_user, get_user_group
 from .common import resolve_group
 from .start import send_welcome
@@ -57,11 +64,46 @@ async def reset_no(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == "reset:yes")
 async def reset_yes(callback: CallbackQuery) -> None:
-    await forget_user(callback.message.chat.id)
-    log.info("Профиль сброшен: chat=%s", callback.message.chat.id)
+    chat_id = callback.message.chat.id
+    await forget_user(chat_id)
+    await forget_reminder(chat_id)
+    log.info("Профиль сброшен: chat=%s", chat_id)
     await callback.answer("Профиль сброшен")
     await callback.message.edit_text("Профиль сброшен.")
     await send_welcome(callback.message)
+
+
+# --- Напоминание про завтрашние пары ------------------------------
+def _reminder_label(value: str) -> str:
+    return "выключено" if value == "off" else f"в {value}"
+
+
+@router.message(F.text == Button.REMINDER)
+async def reminder_menu(message: Message) -> None:
+    if not await resolve_group(message):
+        return
+    cur = effective_reminder(message.chat.id)
+    await message.answer(
+        f"Напоминание про пары на завтра: <b>{_reminder_label(cur)}</b>.\nВыбери время:",
+        reply_markup=build_reminder_picker("rem"),
+    )
+
+
+@router.callback_query(F.data.startswith("rem:") | F.data.startswith("remo:"))
+async def reminder_pick(callback: CallbackQuery) -> None:
+    prefix, value = callback.data.split(":", 1)
+    chat_id = callback.message.chat.id
+    await set_reminder(chat_id, value)
+    log.info("Напоминание: chat=%s → %s", chat_id, value)
+    await callback.answer("Сохранено")
+
+    if prefix == "remo":  # финал онбординга
+        group = await get_user_group(chat_id)
+        note = "" if value == "off" else f"\nБуду присылать расписание на завтра {_reminder_label(value)}."
+        await callback.message.edit_text("Готово! 🎉" + note)
+        await callback.message.answer("Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))
+    else:
+        await callback.message.edit_text(f"Напоминание: <b>{_reminder_label(value)}</b>.")
 
 
 # --- Сообщить об ошибке (FSM) --------------------------------------
