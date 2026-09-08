@@ -1,6 +1,27 @@
 # Деплой
 
-## Быстрый старт (Docker)
+## Сервер
+
+Публичный IP **не нужен** — бот работает на long polling (только исходящий
+трафик). Нужен outbound-доступ к `api.telegram.org` и `college.tu-bryansk.ru`.
+1 ГБ RAM хватает (в проде бот ест ~150–300 МБ); `cloud-init.sh` добавляет
+2 ГБ swap на случай тяжёлой сборки образа.
+
+## Cloud-init (Ubuntu)
+
+Содержимое [`cloud-init.sh`](cloud-init.sh) вставляется в поле «Cloud-init»
+при создании сервера — оно поставит swap, Docker и склонирует проект в
+`/opt/schedule_bot_py`. Лог: `/var/log/cloud-init-output.log`.
+
+После загрузки сервера:
+```bash
+cd /opt/schedule_bot_py
+nano .env                 # BOT_TOKEN, COLLEGE_PAGE_URL, OWNER_CHAT_ID
+docker compose up -d --build
+docker compose logs -f
+```
+
+## Быстрый старт вручную (без cloud-init)
 
 Нужен Docker с плагином Compose (`docker compose version`).
 
