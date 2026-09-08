@@ -12,7 +12,18 @@ from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 
 from .assets import photo
 from .config import config
-from .handlers import admin, full_schedule, group, menu, settings, start, today, week, zameny
+from .handlers import (
+    admin,
+    full_schedule,
+    group,
+    group_search,
+    menu,
+    settings,
+    start,
+    today,
+    week,
+    zameny,
+)
 from .housekeeping import start_housekeeping, stop_housekeeping
 from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware, MaintenanceMiddleware
@@ -215,6 +226,9 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     dp.include_router(zameny.router)
     dp.include_router(menu.router)
     dp.include_router(settings.router)
+    # Последним: ловит свободный текст, не разобранный кнопками/командами/FSM,
+    # и пытается найти по нему группу.
+    dp.include_router(group_search.router)
     dp.startup.register(_on_startup)
     dp.shutdown.register(_on_shutdown)
     dp.errors.register(_on_error)

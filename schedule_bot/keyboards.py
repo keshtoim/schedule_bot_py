@@ -117,6 +117,25 @@ def build_group_picker(year: str, groups: list[str], page: int = 0) -> InlineKey
     return kb.as_markup()
 
 
+def build_group_confirm(group: str) -> InlineKeyboardMarkup:
+    """Подтверждение выбранной группы перед сохранением («верно ли выбрана»)."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Да, сохранить", callback_data=f"grpok:{group}")
+    kb.button(text="↩️ Выбрать другую", callback_data="back:courses")
+    kb.adjust(1)
+    return kb.as_markup()
+
+
+def build_group_search_results(groups: list[str]) -> InlineKeyboardMarkup:
+    """Совпадения по текстовому поиску группы: кнопки-группы + выход к списку курсов."""
+    kb = InlineKeyboardBuilder()
+    for group in groups:
+        kb.button(text=group, callback_data=f"grp:{group}")
+    kb.adjust(2)
+    kb.row(InlineKeyboardButton(text="📚 Все курсы", callback_data="back:courses"))
+    return kb.as_markup()
+
+
 def build_bug_cancel_menu() -> ReplyKeyboardMarkup:
     """Пока бот ждёт текст багрепорта — на клавиатуре только «Отмена»."""
     return ReplyKeyboardMarkup(

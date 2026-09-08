@@ -9,7 +9,9 @@ from schedule_bot.keyboards import (
     REMINDER_CHOICES,
     Button,
     build_bug_cancel_menu,
+    build_group_confirm,
     build_group_picker,
+    build_group_search_results,
     build_main_menu,
     build_more_menu,
     build_reminder_picker,
@@ -86,6 +88,19 @@ check("страница за пределами зажимается к посл
 check("последняя страница: нет «вперёд»", not any(c.startswith("year:24:") and c.endswith(":3") for c in lc))
 check("последняя страница: остаток групп", len([c for c in lc if c.startswith("grp:")]) == len(big) - GROUPS_PER_PAGE * 2)
 check("на каждой странице есть «Назад» к курсам", "back:courses" in p0 and "back:courses" in p1)
+
+# --- результаты текстового поиска группы --------------------------
+res = build_group_search_results(["23-ИСП-1", "24-ИСП-1"])
+rcbs = cbs_of(res)
+check("поиск: кнопки групп через grp:", rcbs[:2] == ["grp:23-ИСП-1", "grp:24-ИСП-1"])
+check("поиск: есть выход «Все курсы» → back:courses", "back:courses" in rcbs)
+
+# --- подтверждение выбранной группы ------------------------------
+conf = build_group_confirm("23-ИСП-1")
+ccbs = cbs_of(conf)
+check("подтверждение: «Да» → grpok:<группа>", "grpok:23-ИСП-1" in ccbs)
+check("подтверждение: «Выбрать другую» → back:courses", "back:courses" in ccbs)
+check("grpok: не перехватывается фильтром grp:", not "grpok:23-ИСП-1".startswith("grp:"))
 
 # --- клавиатура ожидания багрепорта -------------------------------
 check("багрепорт: на клавиатуре только «Отмена»", texts(build_bug_cancel_menu()) == [Button.BUG_CANCEL])

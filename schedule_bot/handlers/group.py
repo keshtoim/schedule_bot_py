@@ -7,6 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from ..keyboards import (
     Button,
+    build_group_confirm,
     build_group_picker,
     build_main_menu,
     build_reminder_picker,
@@ -74,6 +75,17 @@ async def handle_back(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("grp:"))
 async def handle_pick_group(callback: CallbackQuery) -> None:
+    # Сначала подтверждаем — особенно важно после нечёткого текстового поиска.
+    group = callback.data.split(":", 1)[1]
+    await callback.message.edit_text(
+        f"Выбрана группа <b>{escape_html(group)}</b>. Всё верно?",
+        reply_markup=build_group_confirm(group),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("grpok:"))
+async def handle_confirm_group(callback: CallbackQuery) -> None:
     group = callback.data.split(":", 1)[1]
     chat_id = callback.message.chat.id
     await set_user_group(chat_id, group)
