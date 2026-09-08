@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aiogram.types import (
+    InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
@@ -83,6 +84,36 @@ def build_reminder_picker(prefix: str) -> InlineKeyboardMarkup:
         kb.button(text=t, callback_data=f"{prefix}:{t}")
     kb.button(text="Не напоминать", callback_data=f"{prefix}:off")
     kb.adjust(3, 3, 1)
+    return kb.as_markup()
+
+
+GROUPS_PER_PAGE = 8
+
+
+def build_group_picker(year: str, groups: list[str], page: int = 0) -> InlineKeyboardMarkup:
+    """Список групп курса. Если групп больше одной страницы — добавляет строку
+    листания «◀ N/M ▶». `groups` уже отсортирован; `page` считается от 0 и
+    зажимается в допустимые границы."""
+    total_pages = max(1, (len(groups) + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+    start = page * GROUPS_PER_PAGE
+    chunk = groups[start : start + GROUPS_PER_PAGE]
+
+    kb = InlineKeyboardBuilder()
+    for group in chunk:
+        kb.button(text=group, callback_data=f"grp:{group}")
+    kb.adjust(2)
+
+    if total_pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(InlineKeyboardButton(text="◀", callback_data=f"year:{year}:{page - 1}"))
+        nav.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="noop"))
+        if page < total_pages - 1:
+            nav.append(InlineKeyboardButton(text="▶", callback_data=f"year:{year}:{page + 1}"))
+        kb.row(*nav)
+
+    kb.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back:courses"))
     return kb.as_markup()
 
 

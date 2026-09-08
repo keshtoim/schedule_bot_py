@@ -5,9 +5,11 @@ from __future__ import annotations
 import sys
 
 from schedule_bot.keyboards import (
+    GROUPS_PER_PAGE,
     REMINDER_CHOICES,
     Button,
     build_bug_cancel_menu,
+    build_group_picker,
     build_main_menu,
     build_more_menu,
     build_reminder_picker,
@@ -57,6 +59,33 @@ cbs = [b.callback_data for row in picker.inline_keyboard for b in row]
 check("в пикере все варианты времени + off", cbs == [f"rem:{t}" for t in REMINDER_CHOICES] + ["rem:off"])
 check("prefix remo для онбординга", build_reminder_picker("remo").inline_keyboard[0][0].callback_data == "remo:17:00")
 check("callback rem:20:00 корректно делится", "rem:20:00".split(":", 1) == ["rem", "20:00"])
+
+# --- выбор группы: листание по страницам --------------------------
+def cbs_of(markup) -> list[str]:
+    return [b.callback_data for row in markup.inline_keyboard for b in row]
+
+
+small = [f"23-ИСП-{i}" for i in range(1, 5)]  # 4 группы — влезают на одну страницу
+sm = build_group_picker("23", small, 0)
+check("мало групп — без строки листания", not any(c == "noop" or c.startswith("year:") for c in cbs_of(sm)))
+check("мало групп — есть «Назад» к курсам", "back:courses" in cbs_of(sm))
+check("мало групп — все группы показаны", [f"grp:{g}" for g in small] == [c for c in cbs_of(sm) if c.startswith("grp:")])
+
+big = [f"24-ТЕСТ-{i:02d}" for i in range(1, GROUPS_PER_PAGE * 2 + 3)]  # 3 страницы
+p0 = cbs_of(build_group_picker("24", big, 0))
+check("много групп, стр.1: ровно GROUPS_PER_PAGE групп", len([c for c in p0 if c.startswith("grp:")]) == GROUPS_PER_PAGE)
+check("много групп, стр.1: есть «вперёд», нет «назад»", "year:24:1" in p0 and "year:24:-1" not in p0)
+check("много групп, стр.1: индикатор 1/3", any(b.text == "1/3" for row in build_group_picker("24", big, 0).inline_keyboard for b in row))
+
+p1 = cbs_of(build_group_picker("24", big, 1))
+check("стр.2: есть и «назад», и «вперёд»", "year:24:0" in p1 and "year:24:2" in p1)
+
+last = build_group_picker("24", big, 9)  # за пределами — зажимается к последней
+lc = cbs_of(last)
+check("страница за пределами зажимается к последней", "year:24:1" in lc and not any(c == "year:24:3" for c in lc))
+check("последняя страница: нет «вперёд»", not any(c.startswith("year:24:") and c.endswith(":3") for c in lc))
+check("последняя страница: остаток групп", len([c for c in lc if c.startswith("grp:")]) == len(big) - GROUPS_PER_PAGE * 2)
+check("на каждой странице есть «Назад» к курсам", "back:courses" in p0 and "back:courses" in p1)
 
 # --- клавиатура ожидания багрепорта -------------------------------
 check("багрепорт: на клавиатуре только «Отмена»", texts(build_bug_cancel_menu()) == [Button.BUG_CANCEL])

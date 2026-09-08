@@ -2,10 +2,15 @@ import logging
 
 from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, Message
+from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from ..keyboards import Button, build_main_menu, build_reminder_picker
+from ..keyboards import (
+    Button,
+    build_group_picker,
+    build_main_menu,
+    build_reminder_picker,
+)
 from ..services.schedule_service import get_schedule
 from ..store.reminders import get_reminder
 from ..store.user_store import set_user_group
@@ -41,17 +46,23 @@ async def handle_group_command(message: Message) -> None:
 
 @router.callback_query(F.data.startswith("year:"))
 async def handle_year(callback: CallbackQuery) -> None:
-    year = callback.data.split(":", 1)[1]
+    # "year:23" — первая страница; "year:23:2" — листание внутри курса
+    parts = callback.data.split(":", 2)
+    year = parts[1]
+    page = int(parts[2]) if len(parts) > 2 else 0
+
     schedule = await get_schedule()
-    groups = [g for g in schedule.groups if _year_of(g) == year]
+    groups = sorted(g for g in schedule.groups if _year_of(g) == year)
 
-    kb = InlineKeyboardBuilder()
-    for group in groups:
-        kb.button(text=group, callback_data=f"grp:{group}")
-    kb.adjust(2)
-    kb.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back:courses"))
+    await callback.message.edit_text(
+        "Выберите группу:", reply_markup=build_group_picker(year, groups, page)
+    )
+    await callback.answer()
 
-    await callback.message.edit_text("Выберите группу:", reply_markup=kb.as_markup())
+
+@router.callback_query(F.data == "noop")
+async def handle_noop(callback: CallbackQuery) -> None:
+    # кнопка-индикатор «N/M» — нажатие ничего не делает
     await callback.answer()
 
 
