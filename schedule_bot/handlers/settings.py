@@ -73,18 +73,22 @@ async def reset_yes(callback: CallbackQuery) -> None:
     await send_welcome(callback.message)
 
 
-# --- Напоминание про завтрашние пары ------------------------------
+# --- Уведомления: напоминание про завтрашние пары ------------------
 def _reminder_label(value: str) -> str:
     return "выключено" if value == "off" else f"в {value}"
 
 
-@router.message(F.text == Button.REMINDER)
-async def reminder_menu(message: Message) -> None:
+@router.message(F.text == Button.NOTIFICATIONS)
+@router.message(F.text == "⏰ Напоминание")  # старая кнопка, закешированная у пользователей
+async def notifications_menu(message: Message) -> None:
     if not await resolve_group(message):
         return
     cur = effective_reminder(message.chat.id)
     await message.answer(
-        f"Напоминание про пары на завтра: <b>{_reminder_label(cur)}</b>.\nВыбери время:",
+        "🔔 <b>Уведомления</b>\n\n"
+        f"📆 Расписание на завтра — напоминание <b>{_reminder_label(cur)}</b>\n"
+        "🔁 Замены — приходят сами, как только появятся на сайте\n\n"
+        "Во сколько напоминать про пары на завтра:",
         reply_markup=build_reminder_picker("rem"),
     )
 

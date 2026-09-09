@@ -52,7 +52,7 @@ check("Ещё: без кнопок главного меню", not any(b in mt f
 
 # --- подменю «Настройки» ------------------------------------------
 st = texts(build_settings_menu())
-check("Настройки: Группа / Напоминание / Ошибка / Сброс / Назад", st == [Button.GROUP, Button.REMINDER, Button.BUG, Button.RESET, Button.BACK])
+check("Настройки: Группа / Уведомления / Ошибка / Сброс / Назад", st == [Button.GROUP, Button.NOTIFICATIONS, Button.BUG, Button.RESET, Button.BACK])
 check("«👥 Группа» матчится префиксом (как и старая «👥 23-ИСП-1»)", Button.GROUP.startswith(Button.GROUP_PREFIX))
 
 # --- инлайн-выбор времени напоминания ----------------------------

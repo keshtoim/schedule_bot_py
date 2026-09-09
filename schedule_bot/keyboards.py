@@ -23,7 +23,7 @@ class Button:
     SCHEDULE_FILE = "📄 Файл расписания"
     ZAMENY_FILE = "📄 Файл замен"
     GROUP = "👥 Группа"
-    REMINDER = "⏰ Напоминание"
+    NOTIFICATIONS = "🔔 Уведомления"
     BUG = "🐞 Сообщить об ошибке"
     RESET = "🗑 Сбросить профиль"
     BUG_CANCEL = "❌ Отмена"
@@ -68,7 +68,7 @@ def build_more_menu() -> ReplyKeyboardMarkup:
 def build_settings_menu() -> ReplyKeyboardMarkup:
     """Подменю «Настройки». «Назад» возвращает build_main_menu."""
     keyboard = [
-        [KeyboardButton(text=Button.GROUP), KeyboardButton(text=Button.REMINDER)],
+        [KeyboardButton(text=Button.GROUP), KeyboardButton(text=Button.NOTIFICATIONS)],
         [KeyboardButton(text=Button.BUG)],
         [KeyboardButton(text=Button.RESET)],
         [KeyboardButton(text=Button.BACK)],
