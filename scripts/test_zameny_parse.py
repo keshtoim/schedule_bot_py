@@ -8,14 +8,10 @@ from pathlib import Path
 
 from schedule_bot.parser.schedule_parser import parse_schedule
 from schedule_bot.parser.workbook import load_active_sheet
-from schedule_bot.parser.zameny_parser import parse_zameny
+from schedule_bot.parser.zameny_parser import expand_group_cell, parse_zameny
 from schedule_bot.services.group_reconcile import find_zameny_anomalies
 
 SAMPLES = Path(__file__).resolve().parent.parent / "scratch_samples"
-
-if not list(SAMPLES.glob("*.xlsx")):
-    print("SKIP: нет scratch_samples/*.xlsx (реальные файлы не в git)")
-    raise SystemExit(0)
 
 failed = 0
 
@@ -27,7 +23,70 @@ def check(name: str, cond: bool) -> None:
         failed += 1
 
 
+class _FakeSheet:
+    """Достаточно для parse_zameny: он трогает только max_row и text()."""
+
+    def __init__(self, rows: list[list[str]]) -> None:
+        self._rows = rows
+
+    @property
+    def max_row(self) -> int:
+        return len(self._rows)
+
+    @property
+    def max_column(self) -> int:
+        return 5
+
+    def text(self, row: int, col: int) -> str:
+        r = self._rows[row - 1]
+        return r[col - 1] if col - 1 < len(r) else ""
+
+
+def test_multi_group_cell() -> None:
+    # --- expand_group_cell: разные способы записать несколько групп ---------
+    check("«23-ИСП-1,2,3,4» → 4 группы",
+          expand_group_cell("23-ИСП-1,2,3,4") == ["23-ИСП-1", "23-ИСП-2", "23-ИСП-3", "23-ИСП-4"])
+    check("пробелы после запятых не мешают",
+          expand_group_cell("24-ИСП-1, 2, 3") == ["24-ИСП-1", "24-ИСП-2", "24-ИСП-3"])
+    check("разделитель «и»",
+          expand_group_cell("23-ИСП-1 и 23-ИСП-2") == ["23-ИСП-1", "23-ИСП-2"])
+    check("разделитель «/»",
+          expand_group_cell("23-ИСП-1/2") == ["23-ИСП-1", "23-ИСП-2"])
+    check("список полных имён через запятую",
+          expand_group_cell("23-МТОРПО-1, 23-МТОРПО-2") == ["23-МТОРПО-1", "23-МТОРПО-2"])
+    check("одиночная группа — как есть", expand_group_cell("23-ИСП-1") == ["23-ИСП-1"])
+    check("группа без номера — как есть", expand_group_cell("24-ТМ") == ["24-ТМ"])
+    check("подпись подвала не разворачивается", expand_group_cell("Учебная часть") == ["Учебная часть"])
+    check("пустая ячейка → пусто", expand_group_cell("") == [])
+
+    # --- parse_zameny: ячейка с несколькими группами + протяжка вниз --------
+    sheet = _FakeSheet([
+        ["Изменение в расписании занятий на четверг 10.09.2026г. (знаменатель)"],
+        ["ГРУППА", "ПАРА", "ВМЕСТО", "ЗАМЕНА", "кабинет"],
+        ["23-ИСП-1,2,3,4", "1пара", "", "ПОПД Захарова", "лекции"],
+        ["", "2пара", "", "БЖ Даньков", "лекции"],
+        ["25-ЭБУ", "1пара", "ПОПД Зенкина", "ПОПД Захарова", "лекции"],
+    ])
+    block = parse_zameny(sheet)[0]
+    isp3 = [r for r in block.rows if r.group == "23-ИСП-3"]
+    check("23-ИСП-3 получил обе пары из общей ячейки",
+          sorted(r.pair_number for r in isp3) == ["1", "2"])
+    check("развёрнуты все 4 группы × 2 пары = 8 строк",
+          len([r for r in block.rows if r.group.startswith("23-ИСП-")]) == 8)
+    check("строка-продолжение (пустой A) тоже размножена на все группы",
+          len([r for r in block.rows if r.pair_number == "2" and r.group.startswith("23-ИСП-")]) == 4)
+    check("следующая одиночная группа не «прилипла» к списку",
+          [r.group for r in block.rows if r.group == "25-ЭБУ"] == ["25-ЭБУ"])
+
+
 def main() -> None:
+    test_multi_group_cell()
+
+    if not list(SAMPLES.glob("*.xlsx")):
+        print("  skip  проверки на реальных файлах — нет scratch_samples/*.xlsx")
+        print("\nALL PASS" if failed == 0 else f"\n{failed} FAILED")
+        sys.exit(0 if failed == 0 else 1)
+
     # --- формат 2026-09: суффикс чётности в заголовке, имя группы только в
     #     первой строке многострочного блока -------------------------------
     sched = parse_schedule(load_active_sheet(SAMPLES / "raspisanie_2026-09.xlsx"))
