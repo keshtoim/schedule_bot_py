@@ -7,7 +7,6 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramConflictError
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeChat, ErrorEvent
 
 from .assets import photo
@@ -29,6 +28,7 @@ from .keyboards import build_main_menu
 from .middlewares import LoggingMiddleware, MaintenanceMiddleware
 from .services.reminder_sender import start_reminder_sender, stop_reminder_sender
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
+from .store.fsm_storage import JSONFileStorage
 from .store.user_store import get_all_chats
 from .utils.atomic import write_text_atomic
 from .utils.describe_error import describe_error, is_network_error
@@ -209,7 +209,8 @@ def create_bot() -> tuple[Bot, Dispatcher]:
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = Dispatcher(storage=MemoryStorage())  # FSM: багрепорт «опиши проблему»
+    # FSM: багрепорт «опиши проблему» — на диске, чтобы диалог пережил рестарт
+    dp = Dispatcher(storage=JSONFileStorage(config.data_path / "fsm.json"))
 
     logging_mw = LoggingMiddleware()
     maintenance_mw = MaintenanceMiddleware()
