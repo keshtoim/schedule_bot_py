@@ -1,9 +1,11 @@
-"""Вечернее напоминание: раз в день присылает пользователю пары на завтра.
+"""Напоминания о парах: утром — расписание на сегодня, вечером — на завтра.
 
-Время у каждого своё (онбординг / Настройки → Напоминание), по умолчанию
-REMINDER_DEFAULT. Проверяем раз в ~40 с; правило простое: если текущее
-время по Москве уже >= времени напоминания и сегодня ещё не слали —
-шлём и помечаем дату. На следующий день метка сбрасывается сама.
+Время у каждого своё (онбординг / Настройки → 🔔 Уведомления). Вечернее по
+умолчанию REMINDER_DEFAULT, утреннее — MORNING_REMINDER_DEFAULT (по умолчанию
+выключено). Проверяем раз в ~40 с; правило простое: напоминание включено,
+текущее время по Москве уже >= заданного и сегодня по этому виду ещё не
+слали — шлём и помечаем. За полночь метка перестаёт совпадать с датой и
+правило само сбрасывается.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ import logging
 from aiogram import Bot
 
 from ..config import config
-from ..store.reminders import effective_reminder
+from ..store.reminders import KINDS, effective_reminder
 from ..store.user_store import get_all_chats
 from ..utils.atomic import write_text_atomic
 from ..utils.clock import now, today
@@ -35,26 +37,38 @@ def _sent_path():
 
 
 def _load_sent() -> dict[str, str]:
+    """{"<chat_id>:<kind>": "YYYY-MM-DD"}. Старый формат без вида — вечернее."""
     try:
-        return json.loads(_sent_path().read_text("utf-8"))
+        raw = json.loads(_sent_path().read_text("utf-8"))
     except (OSError, ValueError):
         return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        (k if ":" in k else f"{k}:evening"): v
+        for k, v in raw.items()
+        if isinstance(v, str)
+    }
 
 
 def _save_sent(data: dict[str, str]) -> None:
     write_text_atomic(_sent_path(), json.dumps(data, ensure_ascii=False))
 
 
-async def _send_tomorrow(bot: Bot, chat_id: int, group: str) -> None:
-    d = add_days(today(), 1)
+async def _send_reminder(bot: Bot, chat_id: int, group: str, kind: str) -> None:
+    if kind == "morning":
+        d, title = today(), "🔔 <b>Пары на сегодня</b>"
+    else:
+        d, title = add_days(today(), 1), "🔔 <b>Пары на завтра</b>"
+
     if not await day_has_lessons(group, d):
-        log.info("Напоминание chat=%s: на завтра пар нет, пропускаю", chat_id)
+        log.info("Напоминание chat=%s (%s): пар нет, пропускаю", chat_id, kind)
         return
     try:
-        await send_rich_message_html(chat_id, "🔔 <b>Пары на завтра</b>\n" + await build_day_html(group, d))
+        await send_rich_message_html(chat_id, title + "\n" + await build_day_html(group, d))
     except Exception:
-        await bot.send_message(chat_id, "🔔 <b>Пары на завтра</b>\n\n" + await format_day(group, d))
-    log.info("Напоминание отправлено chat=%s", chat_id)
+        await bot.send_message(chat_id, title + "\n\n" + await format_day(group, d))
+    log.info("Напоминание отправлено chat=%s (%s)", chat_id, kind)
 
 
 def _due(target: str, last_sent: str | None, now_hhmm: str, today_iso: str) -> bool:
@@ -65,25 +79,26 @@ def _due(target: str, last_sent: str | None, now_hhmm: str, today_iso: str) -> b
 
 
 async def _tick(bot: Bot, sent: dict[str, str]) -> bool:
-    """Один проход по пользователям. Возвращает True, если что-то поменяли."""
+    """Один проход по пользователям и видам напоминаний. True — если что-то поменяли."""
     hhmm = now().strftime("%H:%M")
     day = today().isoformat()
     changed = False
 
     for chat_id, group in await get_all_chats():
-        key = str(chat_id)
-        if not _due(effective_reminder(chat_id), sent.get(key), hhmm, day):
-            continue
-        try:
-            await _send_tomorrow(bot, chat_id, group)
-        except Exception:
-            # чаще всего это временный сбой сайта колледжа — не помечаем
-            # «отправлено», попробуем на следующем проходе (через ~40 с)
-            log.exception("Напоминание chat=%s: не отправилось, повторю позже", chat_id)
-            continue
-        sent[key] = day
-        changed = True
-        await asyncio.sleep(0.05)  # бережём лимиты Telegram
+        for kind in KINDS:
+            key = f"{chat_id}:{kind}"
+            if not _due(effective_reminder(chat_id, kind), sent.get(key), hhmm, day):
+                continue
+            try:
+                await _send_reminder(bot, chat_id, group, kind)
+            except Exception:
+                # чаще всего это временный сбой сайта колледжа — не помечаем
+                # «отправлено», попробуем на следующем проходе (через ~40 с)
+                log.exception("Напоминание chat=%s (%s): не отправилось, повторю позже", chat_id, kind)
+                continue
+            sent[key] = day
+            changed = True
+            await asyncio.sleep(0.05)  # бережём лимиты Telegram
 
     return changed
 
@@ -92,7 +107,10 @@ def start_reminder_sender(bot: Bot) -> None:
     global _task
 
     async def _loop() -> None:
-        log.info("Напоминалка запущена (дефолт %s, проверка раз в %d с)", config.reminder_default, _CHECK_EVERY_S)
+        log.info(
+            "Напоминалка запущена (утро %s, вечер %s; проверка раз в %d с)",
+            config.morning_reminder_default, config.reminder_default, _CHECK_EVERY_S,
+        )
         sent = _load_sent()
         while True:
             try:

@@ -5,8 +5,9 @@ from __future__ import annotations
 import sys
 
 from schedule_bot.keyboards import (
+    EVENING_CHOICES,
     GROUPS_PER_PAGE,
-    REMINDER_CHOICES,
+    MORNING_CHOICES,
     Button,
     build_bug_cancel_menu,
     build_group_confirm,
@@ -14,6 +15,7 @@ from schedule_bot.keyboards import (
     build_group_search_results,
     build_main_menu,
     build_more_menu,
+    build_notifications_menu,
     build_reminder_picker,
     build_settings_menu,
 )
@@ -55,12 +57,22 @@ st = texts(build_settings_menu())
 check("Настройки: Группа / Уведомления / Ошибка / Сброс / Назад", st == [Button.GROUP, Button.NOTIFICATIONS, Button.BUG, Button.RESET, Button.BACK])
 check("«👥 Группа» матчится префиксом (как и старая «👥 23-ИСП-1»)", Button.GROUP.startswith(Button.GROUP_PREFIX))
 
-# --- инлайн-выбор времени напоминания ----------------------------
-picker = build_reminder_picker("rem")
-cbs = [b.callback_data for row in picker.inline_keyboard for b in row]
-check("в пикере все варианты времени + off", cbs == [f"rem:{t}" for t in REMINDER_CHOICES] + ["rem:off"])
-check("prefix remo для онбординга", build_reminder_picker("remo").inline_keyboard[0][0].callback_data == "remo:17:00")
-check("callback rem:20:00 корректно делится", "rem:20:00".split(":", 1) == ["rem", "20:00"])
+# --- инлайн-выбор времени напоминания (утро / вечер) ------------
+ev_cbs = [b.callback_data for row in build_reminder_picker("rem", "evening").inline_keyboard for b in row]
+check("вечерний пикер: все варианты + off", ev_cbs == [f"rem:evening:{t}" for t in EVENING_CHOICES] + ["rem:evening:off"])
+
+mo = build_reminder_picker("rem", "morning", back="notif:home")
+mo_cbs = [b.callback_data for row in mo.inline_keyboard for b in row]
+check("утренний пикер: свои (ранние) варианты времени", mo_cbs[: len(MORNING_CHOICES)] == [f"rem:morning:{t}" for t in MORNING_CHOICES])
+check("утренний пикер: есть off и кнопка «Назад» на notif:home", "rem:morning:off" in mo_cbs and "notif:home" in mo_cbs)
+check("вечерний пикер без back — без кнопки «Назад»", not any(c == "notif:home" for c in ev_cbs))
+check("онбординг: remo-пикер вечерний", build_reminder_picker("remo", "evening").inline_keyboard[0][0].callback_data == "remo:evening:17:00")
+check("callback rem:evening:20:00 делится на 3 части", "rem:evening:20:00".split(":", 2) == ["rem", "evening", "20:00"])
+
+nm = build_notifications_menu("в 07:30", "выключено")
+nm_cbs = [b.callback_data for row in nm.inline_keyboard for b in row]
+check("меню уведомлений: кнопки утро/вечер", nm_cbs == ["notif:morning", "notif:evening"])
+check("меню уведомлений: показывает текущие значения", any("07:30" in b.text for row in nm.inline_keyboard for b in row))
 
 # --- выбор группы: листание по страницам --------------------------
 def cbs_of(markup) -> list[str]:

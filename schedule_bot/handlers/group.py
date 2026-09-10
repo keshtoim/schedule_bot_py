@@ -13,7 +13,7 @@ from ..keyboards import (
     build_reminder_picker,
 )
 from ..services.schedule_service import get_schedule
-from ..store.reminders import get_reminder
+from ..store.reminders import was_asked
 from ..store.user_store import set_user_group
 from ..utils.html import escape_html
 
@@ -93,11 +93,12 @@ async def handle_confirm_group(callback: CallbackQuery) -> None:
     await callback.message.edit_text(f"Группа сохранена: <b>{escape_html(group)}</b>")
     await callback.answer()
 
-    if get_reminder(chat_id) is None:
-        # первый онбординг — спрашиваем время напоминания, «Готово» пришлёт remo-хендлер
+    if not was_asked(chat_id):
+        # первый онбординг — спрашиваем вечернее время, «Готово» пришлёт remo-хендлер
         await callback.message.answer(
-            "Во сколько присылать расписание на завтра?",
-            reply_markup=build_reminder_picker("remo"),
+            "Во сколько присылать расписание на завтра?\n"
+            "<i>Утренние напоминания «на сегодня» потом включаются в ⚙️ Настройки → 🔔 Уведомления.</i>",
+            reply_markup=build_reminder_picker("remo", "evening"),
         )
     else:
         await callback.message.answer("Готово! Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))

@@ -1,10 +1,12 @@
 import logging
+from contextlib import suppress
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from ..feedback import report_bug
@@ -12,6 +14,7 @@ from ..keyboards import (
     Button,
     build_bug_cancel_menu,
     build_main_menu,
+    build_notifications_menu,
     build_reminder_picker,
     build_settings_menu,
 )
@@ -73,9 +76,28 @@ async def reset_yes(callback: CallbackQuery) -> None:
     await send_welcome(callback.message)
 
 
-# --- Уведомления: напоминание про завтрашние пары ------------------
+# --- Уведомления: утреннее и вечернее напоминание -----------------
 def _reminder_label(value: str) -> str:
     return "выключено" if value == "off" else f"в {value}"
+
+
+def _notif_summary(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
+    m = effective_reminder(chat_id, "morning")
+    e = effective_reminder(chat_id, "evening")
+    text = (
+        "🔔 <b>Уведомления</b>\n\n"
+        f"🌅 Утром, на сегодня — <b>{_reminder_label(m)}</b>\n"
+        f"🌆 Вечером, на завтра — <b>{_reminder_label(e)}</b>\n"
+        "🔁 Замены — приходят сами, как только появятся на сайте\n\n"
+        "Что настроить:"
+    )
+    return text, build_notifications_menu(_reminder_label(m), _reminder_label(e))
+
+
+async def _edit(message: Message, text: str, kb: InlineKeyboardMarkup) -> None:
+    # «message is not modified» при повторном тапе того же варианта — не ошибка
+    with suppress(TelegramBadRequest):
+        await message.edit_text(text, reply_markup=kb)
 
 
 @router.message(F.text == Button.NOTIFICATIONS)
@@ -83,31 +105,52 @@ def _reminder_label(value: str) -> str:
 async def notifications_menu(message: Message) -> None:
     if not await resolve_group(message):
         return
-    cur = effective_reminder(message.chat.id)
-    await message.answer(
-        "🔔 <b>Уведомления</b>\n\n"
-        f"📆 Расписание на завтра — напоминание <b>{_reminder_label(cur)}</b>\n"
-        "🔁 Замены — приходят сами, как только появятся на сайте\n\n"
-        "Во сколько напоминать про пары на завтра:",
-        reply_markup=build_reminder_picker("rem"),
+    text, kb = _notif_summary(message.chat.id)
+    await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data == "notif:home")
+async def notif_home(callback: CallbackQuery) -> None:
+    text, kb = _notif_summary(callback.message.chat.id)
+    await _edit(callback.message, text, kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data.in_({"notif:morning", "notif:evening"}))
+async def notif_pick_kind(callback: CallbackQuery) -> None:
+    kind = callback.data.split(":", 1)[1]
+    cur = effective_reminder(callback.message.chat.id, kind)
+    when = "на сегодня" if kind == "morning" else "на завтра"
+    icon = "🌅" if kind == "morning" else "🌆"
+    label = "Утреннее" if kind == "morning" else "Вечернее"
+    head = (
+        f"{icon} <b>{label} напоминание</b> — расписание {when}.\n"
+        f"Сейчас: <b>{_reminder_label(cur)}</b>. Выбери время:"
     )
+    await _edit(callback.message, head, build_reminder_picker("rem", kind, back="notif:home"))
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("rem:") | F.data.startswith("remo:"))
 async def reminder_pick(callback: CallbackQuery) -> None:
-    prefix, value = callback.data.split(":", 1)
+    parts = callback.data.split(":", 2)
+    if len(parts) == 3:
+        prefix, kind, value = parts
+    else:  # старый двухчастный callback из давно открытого сообщения — это вечернее
+        prefix, kind, value = parts[0], "evening", parts[1]
     chat_id = callback.message.chat.id
-    await set_reminder(chat_id, value)
-    log.info("Напоминание: chat=%s → %s", chat_id, value)
+    await set_reminder(chat_id, kind, value)
+    log.info("Напоминание: chat=%s %s → %s", chat_id, kind, value)
     await callback.answer("Сохранено")
 
-    if prefix == "remo":  # финал онбординга
+    if prefix == "remo":  # финал онбординга (спрашиваем только вечернее)
         group = await get_user_group(chat_id)
         note = "" if value == "off" else f"\nБуду присылать расписание на завтра {_reminder_label(value)}."
         await callback.message.edit_text("Готово! 🎉" + note)
         await callback.message.answer("Пользуйся меню внизу 👇", reply_markup=build_main_menu(group))
     else:
-        await callback.message.edit_text(f"Напоминание: <b>{_reminder_label(value)}</b>.")
+        text, kb = _notif_summary(chat_id)
+        await _edit(callback.message, text, kb)
 
 
 # --- Сообщить об ошибке (FSM) --------------------------------------

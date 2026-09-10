@@ -44,9 +44,12 @@ class Config:
     telegram_proxy: str | None
     # chat_id владельца — туда бот шлёт багрепорты. Свой узнать: /id боту.
     owner_chat_id: int | None
-    # Дефолтное время напоминания «пары на завтра» (HH:MM или "off").
+    # Дефолтное время вечернего напоминания «пары на завтра» (HH:MM или "off").
     # Применяется к тем, кто не выбрал своё в онбординге/настройках.
     reminder_default: str
+    # Дефолт утреннего напоминания «пары на сегодня». По умолчанию "off" —
+    # утренние приходят только тем, кто сам включил их в Настройках.
+    morning_reminder_default: str
     # Обычный режим: COLLEGE_PAGE_URL парсится при каждом обновлении, чтобы
     # найти актуальные ссылки на файлы расписания/замен (они каждый раз
     # перезаливаются под новым именем).
@@ -93,6 +96,7 @@ def _load() -> Config:
         telegram_proxy=os.getenv("TELEGRAM_PROXY") or None,
         owner_chat_id=owner_chat_id,
         reminder_default=_parse_reminder(os.getenv("REMINDER_DEFAULT"), "20:00"),
+        morning_reminder_default=_parse_reminder(os.getenv("MORNING_REMINDER_DEFAULT"), "off"),
         college_page_url=college_page_url,
         schedule_source=schedule_source,
         zameny_source=zameny_source,
