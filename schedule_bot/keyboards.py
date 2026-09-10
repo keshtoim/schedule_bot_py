@@ -23,7 +23,7 @@ class Button:
     SCHEDULE_FILE = "📄 Файл расписания"
     ZAMENY_FILE = "📄 Файл замен"
     GROUP = "👥 Группа"
-    REMINDER = "⏰ Напоминание"
+    NOTIFICATIONS = "🔔 Уведомления"
     BUG = "🐞 Сообщить об ошибке"
     RESET = "🗑 Сбросить профиль"
     BUG_CANCEL = "❌ Отмена"
@@ -32,8 +32,15 @@ class Button:
     GROUP_PREFIX = "👥"
 
 
-# Во сколько бот присылает расписание на завтра. "off" — не присылать.
-REMINDER_CHOICES = ["17:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
+# Время напоминаний. "off" — не присылать. Утро — про пары на сегодня,
+# вечер — про пары на завтра.
+MORNING_CHOICES = ["06:30", "07:00", "07:30", "08:00", "08:30", "09:00"]
+EVENING_CHOICES = ["17:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
+REMINDER_CHOICES = EVENING_CHOICES  # обратная совместимость со старыми импортами
+
+
+def reminder_choices(kind: str) -> list[str]:
+    return MORNING_CHOICES if kind == "morning" else EVENING_CHOICES
 
 
 NO_GROUP_HINT = "Сначала нажми «▶️ Запустить» и выбери группу."
@@ -68,7 +75,7 @@ def build_more_menu() -> ReplyKeyboardMarkup:
 def build_settings_menu() -> ReplyKeyboardMarkup:
     """Подменю «Настройки». «Назад» возвращает build_main_menu."""
     keyboard = [
-        [KeyboardButton(text=Button.GROUP), KeyboardButton(text=Button.REMINDER)],
+        [KeyboardButton(text=Button.GROUP), KeyboardButton(text=Button.NOTIFICATIONS)],
         [KeyboardButton(text=Button.BUG)],
         [KeyboardButton(text=Button.RESET)],
         [KeyboardButton(text=Button.BACK)],
@@ -76,14 +83,26 @@ def build_settings_menu() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
 
 
-def build_reminder_picker(prefix: str) -> InlineKeyboardMarkup:
+def build_reminder_picker(prefix: str, kind: str, *, back: str | None = None) -> InlineKeyboardMarkup:
     """Инлайн-выбор времени напоминания. `prefix` — «rem» (настройки) или
-    «remo» (онбординг): по нему хендлер понимает, что делать после выбора."""
+    «remo» (онбординг); `kind` — «morning»/«evening». callback_data:
+    «{prefix}:{kind}:{ЧЧ:ММ|off}». `back` — на какой экран вернуться кнопкой «Назад»."""
     kb = InlineKeyboardBuilder()
-    for t in REMINDER_CHOICES:
-        kb.button(text=t, callback_data=f"{prefix}:{t}")
-    kb.button(text="Не напоминать", callback_data=f"{prefix}:off")
+    for t in reminder_choices(kind):
+        kb.button(text=t, callback_data=f"{prefix}:{kind}:{t}")
+    kb.button(text="Не напоминать", callback_data=f"{prefix}:{kind}:off")
     kb.adjust(3, 3, 1)
+    if back:
+        kb.row(InlineKeyboardButton(text="◀️ Назад", callback_data=back))
+    return kb.as_markup()
+
+
+def build_notifications_menu(morning_label: str, evening_label: str) -> InlineKeyboardMarkup:
+    """Экран «Уведомления»: две кнопки — настроить утреннее / вечернее напоминание."""
+    kb = InlineKeyboardBuilder()
+    kb.button(text=f"🌅 Утром: {morning_label}", callback_data="notif:morning")
+    kb.button(text=f"🌆 Вечером: {evening_label}", callback_data="notif:evening")
+    kb.adjust(1)
     return kb.as_markup()
 
 

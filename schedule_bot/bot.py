@@ -98,17 +98,20 @@ async def _notify_restart(bot: Bot) -> None:
     for chat_id, group in chats:
         text = (
             f"♻️ Бот перезапущён. Твоя группа — <b>{escape_html(group)}</b>.\n"
-            "Проверить группу и время вечернего напоминания — ⚙️ Настройки."
+            "Проверить группу и уведомления — ⚙️ Настройки."
         )
         kb = build_main_menu(group)
         media = pic_file_id or pic
         try:
+            # disable_notification — служебное «я обновился», будить им никого не надо
             if media is not None:
-                msg = await bot.send_photo(chat_id, media, caption=text, reply_markup=kb)
+                msg = await bot.send_photo(
+                    chat_id, media, caption=text, reply_markup=kb, disable_notification=True
+                )
                 if pic_file_id is None and msg.photo:
                     pic_file_id = msg.photo[-1].file_id
             else:
-                await bot.send_message(chat_id, text, reply_markup=kb)
+                await bot.send_message(chat_id, text, reply_markup=kb, disable_notification=True)
             sent += 1
         except Exception:
             failed += 1
