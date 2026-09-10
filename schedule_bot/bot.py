@@ -57,6 +57,7 @@ COMMANDS = [
 
 # Команды только для владельца — показываются в меню "/" лишь у него.
 OWNER_COMMANDS = [
+    BotCommand(command="stats", description="Статистика: людей и группы"),
     BotCommand(command="announce", description="Разослать сообщение всем"),
     BotCommand(command="maintenance", description="Режим техработ вкл/выкл"),
     BotCommand(command="id", description="Показать chat_id"),

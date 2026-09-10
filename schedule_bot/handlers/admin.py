@@ -12,6 +12,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .. import maintenance
 from ..config import config
+from ..services.stats import format_stats
 from ..store.user_store import get_all_chats
 
 router = Router(name="admin")
@@ -37,6 +38,13 @@ async def handle_maintenance(message: Message) -> None:
         )
     else:
         await message.answer("✅ Режим техработ <b>выключен</b>. Бот снова работает для всех.")
+
+
+@router.message(Command("stats"))
+async def handle_stats(message: Message) -> None:
+    if not _is_owner(message):
+        return
+    await message.answer(format_stats(await get_all_chats()))
 
 
 @router.message(Command("announce"))
