@@ -26,7 +26,7 @@ from .handlers import (
 )
 from .housekeeping import start_housekeeping, stop_housekeeping
 from .keyboards import build_main_menu
-from .middlewares import LoggingMiddleware, MaintenanceMiddleware
+from .middlewares import LoggingMiddleware, MaintenanceMiddleware, ThrottleMiddleware
 from .services.reminder_sender import start_reminder_sender, stop_reminder_sender
 from .services.zameny_notifier import start_zameny_watcher, stop_zameny_watcher
 from .store.user_store import get_all_chats
@@ -215,9 +215,11 @@ def create_bot() -> tuple[Bot, Dispatcher]:
     )
     dp = Dispatcher(storage=MemoryStorage())  # FSM: багрепорт «опиши проблему»
 
+    throttle_mw = ThrottleMiddleware()
     logging_mw = LoggingMiddleware()
     maintenance_mw = MaintenanceMiddleware()
     for observer in (dp.message, dp.callback_query):
+        observer.outer_middleware(throttle_mw)  # первым: флудеры не засоряют лог
         observer.outer_middleware(logging_mw)
         observer.outer_middleware(maintenance_mw)
 
