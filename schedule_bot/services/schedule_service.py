@@ -12,7 +12,7 @@ from ..parser.workbook import load_active_sheet
 from ..parser.zameny_parser import ZamenyBlock, parse_zameny
 from .college_page_scraper import fetch_college_links
 from ..utils.describe_error import describe_error
-from .file_source import resolve_local_file
+from .file_source import FetchResult, resolve_local_file
 from .group_reconcile import ZamenyAnomaly, find_zameny_anomalies
 
 log = logging.getLogger(__name__)
@@ -43,52 +43,73 @@ async def _resolve_source_urls() -> tuple[str, str]:
     return links.schedule_url, links.zameny_url
 
 
+async def _load_schedule(fetch: FetchResult, prev: CachedData | None) -> Schedule:
+    # Сервер подтвердил, что файл с прошлой загрузки не менялся (HTTP 304) —
+    # раз мы уже разбирали его в этом процессе, разбирать заново нечего.
+    if fetch.unchanged and prev is not None:
+        return prev.schedule
+    sheet = await asyncio.to_thread(load_active_sheet, fetch.path)
+    return parse_schedule(sheet)
+
+
+async def _load_zameny(fetch: FetchResult, prev: CachedData | None) -> list[ZamenyBlock]:
+    if fetch.unchanged and prev is not None:
+        return prev.zameny
+    sheet = await asyncio.to_thread(load_active_sheet, fetch.path)
+    return parse_zameny(sheet)
+
+
 async def _fetch_data() -> CachedData:
     started = time.time()
-    log.info("Обновляю данные: расписание + замены")
+    log.info("Проверяю данные: расписание + замены")
     cache_dir = config.data_path / "cache"
     schedule_src, zameny_src = await _resolve_source_urls()
+    prev = _cache  # с прошлого успешного разбора в этом же процессе
 
-    schedule_file, zameny_file = await asyncio.gather(
+    schedule_fetch, zameny_fetch = await asyncio.gather(
         resolve_local_file(schedule_src, cache_dir, "raspisanie.xlsx"),
         resolve_local_file(zameny_src, cache_dir, "zameny.xlsx"),
     )
 
-    schedule_sheet, zameny_sheet = await asyncio.gather(
-        asyncio.to_thread(load_active_sheet, schedule_file),
-        asyncio.to_thread(load_active_sheet, zameny_file),
+    schedule, zameny = await asyncio.gather(
+        _load_schedule(schedule_fetch, prev),
+        _load_zameny(zameny_fetch, prev),
     )
 
-    schedule = parse_schedule(schedule_sheet)
-    zameny = parse_zameny(zameny_sheet)
     log.info(
-        "Разобрано за %.1f с: расписание — %d групп / %d дней; замены — %d блок(ов), %d строк",
+        "Готово за %.1f с: расписание — %s (%d групп / %d дней); замены — %s (%d блок(ов), %d строк)",
         time.time() - started,
+        "не менялось" if schedule_fetch.unchanged and prev is not None else "разобрано",
         len(schedule.groups),
         len(schedule.days),
+        "не менялись" if zameny_fetch.unchanged and prev is not None else "разобраны",
         len(zameny),
         sum(len(b.rows) for b in zameny),
     )
 
-    # Best-effort — баг в проверке несоответствий не должен ломать обычную
-    # выдачу расписания и замен.
-    try:
-        anomalies = find_zameny_anomalies(schedule, zameny)
-        if anomalies:
-            log.warning(
-                "Замены: возможные опечатки в названиях групп — %d: %s",
-                len(anomalies),
-                ", ".join(f"{a.stated_group}→{a.likely_group}" for a in anomalies),
-            )
-    except Exception:
-        log.exception("Не удалось проверить замены на несоответствия")
-        anomalies = []
+    both_unchanged = schedule_fetch.unchanged and zameny_fetch.unchanged and prev is not None
+    if both_unchanged:
+        anomalies = prev.anomalies
+    else:
+        # Best-effort — баг в проверке несоответствий не должен ломать обычную
+        # выдачу расписания и замен.
+        try:
+            anomalies = find_zameny_anomalies(schedule, zameny)
+            if anomalies:
+                log.warning(
+                    "Замены: возможные опечатки в названиях групп — %d: %s",
+                    len(anomalies),
+                    ", ".join(f"{a.stated_group}→{a.likely_group}" for a in anomalies),
+                )
+        except Exception:
+            log.exception("Не удалось проверить замены на несоответствия")
+            anomalies = []
 
     return CachedData(
         schedule=schedule,
         zameny=zameny,
-        schedule_file_path=schedule_file,
-        zameny_file_path=zameny_file,
+        schedule_file_path=schedule_fetch.path,
+        zameny_file_path=zameny_fetch.path,
         anomalies=anomalies,
         fetched_at=time.time(),
     )
