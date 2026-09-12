@@ -54,7 +54,7 @@ check("plain: пара 4 добавлена", lines[3].startswith("<b>Пара 4
 
 table = _day_table_html(day, "23-ИСП-1", True, block)
 print("\n" + table)
-check("rich: пара 4 в таблице", "<td>4</td><td>14.30–16.05</td><td>➕ комп.сети (Симонян)</td><td>210</td>" in table)
+check("rich: пара 4 в таблице, аудитория с префиксом «ауд.»", "<td>4</td><td>14.30–16.05</td><td>➕ комп.сети (Симонян)</td><td>ауд. 210</td>" in table)
 check("rich: строк ровно 4", table.count("<tr>") == 5)  # 1 заголовок + 4 пары
 
 # Пара, которой нет в сетке вообще (grid_pair отсутствует) — тоже показываем,

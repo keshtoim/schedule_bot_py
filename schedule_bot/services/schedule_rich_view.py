@@ -26,19 +26,34 @@ def _esc(text: str) -> str:
 _TEACHER_WORD_RE = re.compile(r"^[А-ЯЁ][а-яё]{2,}$")
 
 
-def _split_lesson_text(raw: str) -> tuple[str, str]:
-    """Эвристика: делим сырой текст "Предмет Преподаватель [...] кабинет" на
-    предмет и строку "преподаватель, ауд. кабинет" для двух колонок таблицы.
-    Разделителей в источнике нет: слово с заглавной буквы (Токарев) — фамилия,
-    аббревиатура капсом (БЖ, ПОПД) или фраза строчными — часть предмета.
-    Если не разобрать — всё уходит в колонку предмета."""
+def _format_location(location: str) -> str:
+    """«204» -> «ауд. 204»; нечисловые пометки («лекции», «дистант») — как есть."""
+    if not location:
+        return ""
+    prefix = "ауд. " if location[:1].isdigit() else ""
+    return f"{prefix}{location}"
+
+
+def _combine_teacher_location(teacher: str, location: str) -> str:
+    loc = _format_location(location)
+    if teacher and loc:
+        return f"{teacher}, {loc}"
+    return teacher or loc or "—"
+
+
+def _split_subject_teacher(raw: str) -> tuple[str, str, str]:
+    """Эвристика: делит сырой текст "Предмет Преподаватель [...] кабинет" на
+    (предмет, преподаватель, хвост-локация). Разделителей в источнике нет:
+    слово с заглавной буквы (Токарев) — фамилия, аббревиатура капсом (БЖ,
+    ПОПД) или фраза строчными — часть предмета. Не разобрать — весь текст
+    в предмет, преподаватель и локация пустые."""
     if re.search(r'["«]', raw):
-        return raw, "—"
+        return raw, "", ""
 
     tokens = raw.split()
     teacher_start = next((i for i, t in enumerate(tokens) if _TEACHER_WORD_RE.match(t)), -1)
     if teacher_start <= 0:
-        return raw, "—"
+        return raw, "", ""
 
     subject = " ".join(tokens[:teacher_start])
     rest = tokens[teacher_start:]
@@ -47,15 +62,26 @@ def _split_lesson_text(raw: str) -> tuple[str, str]:
     while teacher_end < len(rest) and _TEACHER_WORD_RE.match(rest[teacher_end]):
         teacher_end += 1
 
-    teachers = ", ".join(rest[:teacher_end])
+    teacher = ", ".join(rest[:teacher_end])
     location = " ".join(rest[teacher_end:]).replace(",", ", ")
-    if location:
-        prefix = "ауд. " if location[:1].isdigit() else ""
-        teacher = f"{teachers}, {prefix}{location}"
-    else:
-        teacher = teachers
+    return subject, teacher, location
 
-    return subject, teacher
+
+def _split_lesson_text(raw: str) -> tuple[str, str]:
+    """Как _split_subject_teacher, но сразу отдаёт готовую вторую колонку
+    "преподаватель, ауд. кабинет" — для обычного расписания, где и
+    преподаватель, и кабинет зашиты в одну строку."""
+    subject, teacher, location = _split_subject_teacher(raw)
+    return subject, _combine_teacher_location(teacher, location)
+
+
+def _split_zameny_replacement(replacement: str, room: str) -> tuple[str, str]:
+    """Как _split_lesson_text, но для замены: кабинет уже отдельным полем
+    (`room`), в самом тексте замены его обычно нет — учитываем и то, и
+    другое, на случай если он всё же затесался в конец текста."""
+    subject, teacher, location = _split_subject_teacher(replacement)
+    combined_location = " ".join(p for p in (location, room) if p)
+    return subject, _combine_teacher_location(teacher, combined_location)
 
 
 def _pair_row_html(
@@ -75,8 +101,8 @@ def _pair_row_html(
         subject = "❌ Отменено"
         teacher = f"было: {z_row.instead_of}"
     elif z_row:
-        subject = f"🔁 {z_row.replacement}"
-        teacher = z_row.room or "—"
+        subj, teacher = _split_zameny_replacement(z_row.replacement, z_row.room)
+        subject = f"🔁 {subj}"
     else:
         subject, teacher = _split_lesson_text(text)
 
@@ -89,9 +115,10 @@ def _pair_row_html(
 def _added_pair_row_html(row: ZamenyRow, grid_pair) -> str:
     """Пара, которой нет в расписании группы, но её добавили заменой."""
     time = f"{_esc(grid_pair.time_start)}–{_esc(grid_pair.time_end)}" if grid_pair else "—"
+    subject, teacher = _split_zameny_replacement(row.replacement, row.room)
     return (
         f"<tr><td>{_esc(row.pair_number)}</td><td>{time}</td>"
-        f"<td>➕ {_esc(row.replacement)}</td><td>{_esc(row.room or '—')}</td></tr>"
+        f"<td>➕ {_esc(subject)}</td><td>{_esc(teacher)}</td></tr>"
     )
 
 
